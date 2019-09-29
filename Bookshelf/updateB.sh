@@ -23,6 +23,8 @@ Raymond Moody/Glimpses of Eternity_ Sharing a Love (4)/Glimpses of Eternity_ Sha
 Raymond Moody/Life After Life (56)/Life After Life - Raymond Moody.epub
 "
 
+PATH="$PATH:/cygdrive/c/Program Files (x86)/Calibre2"
+
 # 0. manual steps (done in Calibre GUI)
 #   a) buy from amazon/borrow from library/dl from internet
 #   b) import & strip drm
@@ -70,10 +72,10 @@ for book in $books; do
     mv "index.html" "contents.html"
     
     # 3. run fixtoc
-    php ../fixtocB.php
+    php-cli ../fixtocB.php
     
     # 4. run generate-index
-    php ../generate-index2B.php > index.html
+    php-cli ../generate-index2B.php > index.html
   fi
 
   cd ..
@@ -85,7 +87,7 @@ for book in $books; do
   fi
 done
 if [[ $1 != putonly ]];then
-  php generate-index1B.php > index.html
+  php-cli generate-index1B.php > index.html
 fi
 if [[ -n $1 ]];then
   for f in index.html noauth.php .wwl/.htaccess; do
