@@ -1,0 +1,184 @@
+/***** desktop ****/
+.desktop {
+  /* border width */
+  /* border curve */
+  /* other */
+  /* toc + book */
+  /* other */ }
+  .desktop body {
+    border-width: 0px 0px 0px 0px;
+    margin: 0px;
+    padding: 0px; }
+  .desktop table {
+    /*	table-layout: fixed; */
+    border-radius: 14px;
+    border-width: 0px 0px 0px 0px;
+    box-shadow: 10px 10px 5px 2px #888888;
+    margin: 0px;
+    padding: 0px;
+    width: auto;
+    height: 100%;
+    border-collapse: separate;
+    border-spacing: 0; }
+  .desktop table tr {
+    height: auto; }
+  .desktop table tr td {
+    border-width: 1px 1px 0px 0px; }
+  .desktop table tr:last-child td {
+    border-width: 1px 1px 1px 0px; }
+  .desktop table tr td:first-child {
+    border-width: 1px 1px 0px 1px; }
+  .desktop table tr:last-child td:first-child {
+    border-width: 1px 1px 1px 1px; }
+  .desktop table tr:first-child td:first-child {
+    border-radius: 14px 0px 0px 0px; }
+  .desktop table tr:first-child td:last-child {
+    border-radius: 0px 14px 0px 0px; }
+  .desktop table tr:last-child td:first-child {
+    border-radius: 0px 0px 0px 14px; }
+  .desktop table tr:last-child td:last-child {
+    border-radius: 0px 0px 14px 0px; }
+  .desktop table tr td {
+    background-color: #ffffff;
+    color: #000000;
+    font-family: Arial;
+    font-size: 14px;
+    font-weight: normal;
+    padding: 2px;
+    text-align: left;
+    vertical-align: middle;
+    border-color: black;
+    border-style: solid; }
+  .desktop table tr:first-child td {
+    height: auto;
+    background-color: #005fbf;
+    color: #ffffff;
+    font-family: Arial;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 7px;
+    text-align: center;
+    vertical-align: middle;
+    border-color: black;
+    border-style: solid; }
+  .desktop h1 {
+    font-family: Arial;
+    font-size: 30px;
+    font-weight: bold; }
+  .desktop ul {
+    -webkit-padding-start: 0px;
+    padding: 0px 0px 0px 0px; }
+  .desktop ul li {
+    padding: 3px; }
+  .desktop .toccell {
+    height: 100%; }
+  .desktop .tocdiv {
+    width: 2.5in;
+    height: 100%;
+    overflow-y: scroll;
+    position: relative; }
+  .desktop .bookcell {
+    width: 7.0in;
+    height: 100%; }
+  .desktop .bookframe {
+    border-width: 0px 0px 0px 0px;
+    margin: 0px;
+    padding: 0px;
+    width: 100%;
+    height: 100%; }
+  .desktop button {
+    text-align: left; }
+  .desktop .h1 {
+    font-family: Arial;
+    font-size: 30px;
+    font-weight: bold;
+    margin: 0px;
+    padding: 0px; }
+  .desktop .h2 {
+    font-family: Arial;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0px;
+    padding: 0px; }
+  .desktop .zerorow {
+    /*	  height: 100%; */ }
+  .desktop .growrow {
+    /*	  height: 100%; */ }
+
+/************ mobile **************/
+.mobile {
+  /* other */
+  /* toc + book */
+  /* zreo & grow */ }
+  .mobile body {
+    border-width: 0px 0px 0px 0px;
+    margin: 0px;
+    padding: 0px; }
+  .mobile table {
+    border-width: 0px 0px 0px 0px;
+    width: 100%;
+    height: 100%;
+    margin: 0px;
+    padding: 0px;
+    border-collapse: separate;
+    border-spacing: 0; }
+  .mobile table tr td {
+    background-color: #ffffff;
+    color: #000000;
+    font-family: Arial;
+    font-size: 14px;
+    font-weight: normal;
+    padding: 2px;
+    text-align: left;
+    vertical-align: middle;
+    border-color: black;
+    border-style: solid;
+    border-width: 0px 0px 0px 0px; }
+  .mobile table tr:first-child td {
+    background-color: #005fbf;
+    color: #ffffff;
+    font-family: Arial;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 7px;
+    text-align: center;
+    vertical-align: middle;
+    border-color: black;
+    border-style: solid; }
+  .mobile button {
+    text-align: left; }
+  .mobile .h1 {
+    font-family: Arial;
+    font-size: 30px;
+    font-weight: bold;
+    margin: 0px;
+    padding: 0px; }
+  .mobile .h2 {
+    font-family: Arial;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0px;
+    padding: 0px; }
+  .mobile .toccell {
+    display: none; }
+  .mobile .bookcolumn {
+    width: 100%; }
+  .mobile .bookcell {
+    width: 100%;
+    height: 100%; }
+  .mobile .bookframe {
+    border-width: 0px 0px 0px 0px;
+    margin: 0px;
+    padding: 0px;
+    width: 100%;
+    height: 100%; }
+  .mobile .zerocolumn {
+    display: none;
+    width: 0%; }
+  .mobile .growcolumn {
+    width: 100%; }
+  .mobile .zerorow {
+    display: none;
+    height: 0%; }
+  .mobile .growrow {
+    height: 100%; }
