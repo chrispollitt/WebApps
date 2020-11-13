@@ -12,13 +12,12 @@
      (https://www.vpl.ca/)
 
 4. Manual steps (done in Calibre GUI)
-   a) buy from amazon/borrow from library/dl from internet
-   b) import & strip drm
-   c) convert to EPUB
-   d) fetch-ebook-metadata (choose cover)
-   e) manually clean-up metadata if necessary
-   f) ebook-polish?
-   g) manually clean-up text if necessary
+* import & strip drm
+* convert to EPUB
+* fetch-ebook-metadata (choose cover)
+* manually clean-up metadata if necessary
+* ebook-polish?
+* manually clean-up text if necessary
 
 5. Run script  
      (updateB.sh)
