@@ -1,12 +1,12 @@
 
 import socket
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 dns_cache = {}
 opener = {}
 orig_getaddrinfo = {}
-urlopen = urllib2.urlopen
-Request = urllib2.Request
+urlopen = urllib.request.urlopen
+Request = urllib.request.Request
 
 # 0=host,                 1=port[, 2=family[, 3=socktype[, 4=proto[, 5=flags]]]]
 # 0='www.whatwelove.org', 1=80,    2=0,       3=1
@@ -34,10 +34,10 @@ def dnsinit(dns_map):
     orig_getaddrinfo = socket.getaddrinfo
     socket.getaddrinfo = new_getaddrinfo
     dns_cache = dns_map
-    opener = urllib2.build_opener()
+    opener = urllib.request.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-    urllib2.install_opener(opener)
-    urlopen = urllib2.urlopen
+    urllib.request.install_opener(opener)
+    urlopen = urllib.request.urlopen
 
 def getmap():
     global dns_cache

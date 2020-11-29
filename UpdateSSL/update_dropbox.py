@@ -1,4 +1,4 @@
-#!/home/whatwelo/bin/python2
+#!/home/whatwelo/bin/python3
 
 from dropbox import Dropbox
 from dropbox.files import WriteMode
@@ -26,7 +26,7 @@ for filen in files:
         dirn = dirname(filen)
         src = path_join(lroot, dirn, base)
         dst = path_join(rroot, dirn, base)
-        print 'Uploading %s to dropbox:%s' % (src, dst)
+        print('Uploading %s to dropbox:%s' % (src, dst))
         with open(src) as f:
             dbx.files_upload(
                 f,
@@ -36,7 +36,7 @@ for filen in files:
                 mute=True
             )
     except Exception as err:
-        print("Failed to upload %s\n%s" % (file, err))
+        print(("Failed to upload %s\n%s" % (file, err)))
 print("Finished upload.")
 
 """

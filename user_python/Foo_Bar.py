@@ -1,4 +1,3 @@
-#!/usr/bin/python -Wall
 #
 # FooBar module
 #
