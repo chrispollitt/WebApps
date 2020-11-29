@@ -16,6 +16,7 @@ def foo(one):
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, err = proc.communicate()
     if proc.returncode == 0:
+        output = output.decode()
         # split on newline
         vals = output.split("\n")
         three = vals[0]

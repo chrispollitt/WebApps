@@ -1,0 +1,42 @@
+cd /home/whatwelo/cronlog
+/bin/bash ./test_update_ssl.sh | tee update_ssl.log
+
+------------------
+
+/home/whatwelo/local/usr/bin
+
+update_ssl.sh
+  create_ca_ssl_certs-le.sh
+    curl
+    update_dyndns_test.php
+    get_subdomains.php
+    acme_tiny.py                          [1]
+      get_subdomains.php
+  update_certs.php whatwelove
+  update_certs.php universal-laughter
+  update_certs.php landmarkcourt
+  update_certs.php u-l
+  update_dropbox.py
+
+------------
+
+https://letsencrypt.org/certificates/ - TO BE UPDATED!!!
+
+Self-signed
+  https://letsencrypt.org/certs/isrgrootx1.pem                                       X1 [3]
+  https://letsencrypt.org/certs/letsencryptauthorityx3.pem                           X3 [3]
+Cross-signed
+  https://www.identrust.com/node/935                                                 X1 [2]
+  https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem                     X3 [3]
+
+[1] source
+  https://github.com/diafygi/acme-tiny
+
+[2] source
+  https://www.identrust.com/support/downloads
+    TrustID X3
+      Root Certificate Download
+        https://www.identrust.com/node/935
+
+[3] source
+  https://letsencrypt.org/certs
