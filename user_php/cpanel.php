@@ -1,15 +1,15 @@
 <?php
-/*
+/*********************************************
 
 What:
   cPanel php API (v2)
   https://documentation.cpanel.net/display/SDK/Guide+to+cPanel+API+2
 Usage:
   require_once('cpanel.php');
-  cpinit("cs7.uhcloud.com", "whatwelove.org");
+  cpinit("cs16.uhcloud.com", "whatwelove.org");
   $subdomains = get_subdomains();
 
-*/
+**********************************************/
 
 require_once("Foo_Bar.php");
 require_once("cpaneluapi.class.php"); 
@@ -20,6 +20,8 @@ $cpuser = '';
 $cppass = '';
 $uapi   = '';
 
+////////////////////////////////////
+// initialize
 function cpinit($host, $dom) {
   global $cphost;
   global $domain;
@@ -48,7 +50,6 @@ function call_cpanel($cparray) {
   // cpanel api url
   if( $cparray['cpanel_jsonapi_func'] == "errlog") {
     $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/stats/errlog.html";
-    //         https://           :2083/cpsess6349460137/frontend/paper_lantern/stats/errlog.html
   }
   else {
     $cpurl  = "https://".$cphost.":2083/cpsess1443216474/json-api/cpanel";
@@ -235,6 +236,50 @@ function get_subdomains($sub=false) {
   }
 }
 
+//////////////////////////////////
+// delete certs for a domain
+function delete_certs($domain) {
+  global $cphost;
+  global $uapi;
+
+  // check arggs
+  if ($domain == "") {
+    fwrite(STDERR, "domain not set\n");
+    exit(1);
+  }
+
+  $uapi->scope = 'SSL';
+
+  // get list of keys
+  $res = $uapi->list_keys();
+#fwrite(STDERR, "debug: res=".print_r($res,true)."\n");
+  foreach($res->{'data'} as $dom) {
+    $pat = '/\Q' . $domain . '\E/i';
+    if(preg_match($pat, $dom->{'friendly_name'} )) {
+      echo "deleting ssl key=" . $dom->{'friendly_name'} . ", id=" . $dom->{'id'} . "\n";
+      $id = $dom->{'id'};
+      $res = $uapi->delete_key( array('id' => $id));
+#fwrite(STDERR, "debug: res=".print_r($res,true)."\n");
+      echo "status=" . $res->{'status'} . "\n";
+    }
+  }
+
+  // get list of certs
+  $res = $uapi->list_certs();
+#fwrite(STDERR, "debug: res=".print_r($res,true)."\n");
+  foreach($res->{'data'} as $dom) {
+    if($dom->{'subject.commonName'} == $domain) {
+      echo "deleting domain ssl cert=" . $dom->{'subject.commonName'} . ", id=" . $dom->{'id'} . "\n";
+      $id = $dom->{'id'};
+      $res = $uapi->delete_cert( array('id' => $id));
+#fwrite(STDERR, "debug: res=".print_r($res,true)."\n");
+      echo "status=" . $res->{'status'} . "\n";
+    }
+  }
+
+  // return
+  return;
+}
 
 /////////////////////////////////////
 // update certs
@@ -380,6 +425,8 @@ function update_certs($crt_file) {
       echo "error: sub=$sub, not found, skipping\n";
     }
     else {
+      // delete existing cert(s)
+      delete_certs($sub);
       // update record
       $cparray = array(
         "cpanel_jsonapi_module" => "SSL",

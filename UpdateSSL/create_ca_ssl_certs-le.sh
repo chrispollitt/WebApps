@@ -144,6 +144,7 @@ function gen_cert() {
   
   # fix domain cert
   dos2unix "$tmp_crt"
+  perl -lpi -e 'if( /^-----END CERTIFICATE-----/) {print $_;exit}' "$tmp_crt"
   openssl x509 -in "$tmp_crt" -noout -text | \
     perl -lpe '@d=split(/,? ?DNS:/,$_);if($#d>0){$t=shift(@d);@d=grep{$_ ne "'"$host"'"}@d;$_=$t."DNS:'"$host"', DNS:".join(", DNS:",@d)}' \
     > "$cert"
@@ -153,12 +154,9 @@ function gen_cert() {
 
 function roots_and_chains() {
   # get their certs
-#  curl --silent https://www.identrust.com/certificates/trustid/root-download-x3.html | \
-#    perl -lne 's/\r//;if(s/\s*\<textarea[^>]*\>/-----BEGIN CERTIFICATE-----/ .. s/[ \t]*\<\/textarea\>/-----END CERTIFICATE-----/) {print $_}' > "$tmp_rca2"
-  curl --silent https://www.identrust.com/node/935  > "$tmp_rca2".p7b
-  openssl pkcs7 -inform der -print_certs -in "$tmp_rca2".p7b -out "$tmp_rca2"
   curl --silent https://letsencrypt.org/certs/isrgrootx1.pem > "$tmp_rca1"
-  curl --silent https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem > "$tmp_sca"
+  curl --silent https://letsencrypt.org/certs/isrg-root-x1-cross-signed.pem > "$tmp_rca2"
+  curl --silent https://letsencrypt.org/certs/lets-encrypt-r3.pem > "$tmp_sca"
   
   # fix root certs
   dos2unix "$tmp_rca1"
