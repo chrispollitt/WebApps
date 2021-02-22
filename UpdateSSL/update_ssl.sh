@@ -44,4 +44,9 @@ update_certs.php cs16.uhcloud.com certs/u-l.ca.crt
 echo "##### update_dropbox.py #####"
 update_dropbox.py
 
+# email log
+echo "##### email log to webmaster #####"
+mailx -s "update_ssl.log" webmaster@whatwelove.org < update_ssl.log
+
+# end
 echo "#### END update_ssl ####"
