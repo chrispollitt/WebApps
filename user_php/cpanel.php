@@ -48,8 +48,15 @@ function call_cpanel($cparray) {
 #fwrite(STDERR, "debug: func=".$cparray['cpanel_jsonapi_func']."\n");
 #fwrite(STDERR, "debug: query=".http_build_query($cparray)."\n");
   // cpanel api url
-  if( $cparray['cpanel_jsonapi_func'] == "errlog") {
+  if(     $cparray['cpanel_jsonapi_func'] == "errlog" ) {
     $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/stats/errlog.html";
+  }
+  elseif( $cparray['cpanel_jsonapi_func'] == "sysstats" ) {
+//  $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/index.html";
+    $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/resource_usage/resource_usage.live.pl#/current";
+  }
+  elseif( $cparray['cpanel_jsonapi_func'] == "sysinfo" ) {
+    $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/home/status.html";
   }
   else {
     $cpurl  = "https://".$cphost.":2083/cpsess1443216474/json-api/cpanel";
@@ -68,7 +75,11 @@ function call_cpanel($cparray) {
     curl_setopt($curl, CURLOPT_RETURNTRANSFER,1);       // Return contents of transfer on curl_exec
     curl_setopt($curl, CURLOPT_HTTPHEADER, $header);    // set the username and password
     curl_setopt($curl, CURLOPT_URL, $cpurl);            // set URL
-    if( $cparray['cpanel_jsonapi_func'] == "errlog") {
+    if(
+      $cparray['cpanel_jsonapi_func'] == "errlog"    ||
+      $cparray['cpanel_jsonapi_func'] == "sysstats"  ||
+      $cparray['cpanel_jsonapi_func'] == "sysinfo"
+    ) {
       curl_setopt($curl, CURLOPT_HTTPGET, TRUE);        // set method to GET
     } else {
       curl_setopt($curl, CURLOPT_POST, count($cparray));// set method to POST
@@ -79,7 +90,7 @@ function call_cpanel($cparray) {
       throw new Exception('curl_exec threw error: ' . curl_error($curl) ); 
     }
     curl_close($curl);
-    // html output
+    // html output //////////////////////
     if( $cparray['cpanel_jsonapi_func'] == "errlog") {
 #fwrite(STDERR, "debug: resp=".$response."\n");
       $inerrlog = 0;
@@ -99,7 +110,29 @@ function call_cpanel($cparray) {
         }
       }
       $data[] = "";
-	}
+	  }
+    elseif( $cparray['cpanel_jsonapi_func'] == "sysstats" ) {
+      $data[] = "[sysstats not implimented yet]";
+      $result = 1;
+    }
+    elseif( $cparray['cpanel_jsonapi_func'] == "sysinfo" ) {
+      $dom = new domDocument;
+      libxml_use_internal_errors(true);
+      @$dom->loadHTML($response);
+      $dom->preserveWhiteSpace = false;
+      $tables = $dom->getElementsByTagName('table');      
+      $rows = $tables->item(1)->getElementsByTagName('tr');
+      foreach ($rows as $row) {
+        $cols = $row->getElementsByTagName('td');
+        $var = trim($cols->item(0)->textContent);
+        $val = trim($cols->item(1)->textContent);
+        if($val && $val != "up") {
+          $data[] = $var  . ": " . $val;
+        }
+      }
+      $result = 1;
+    }
+    // json output /////////////////////
     else {
       $json = json_decode($response);
 #fwrite(STDERR, "debug: json=".print_r($json,true)."\n");
@@ -556,6 +589,37 @@ function get_error_log() {
     trigger_error( "get error log failed", E_USER_NOTICE);
   }
   
+  return($data);
+}
+
+/////////////
+// get system stats and info
+function get_stats() {
+  global $cphost;
+  global $domain;
+  global $uapi;
+
+  // Get ResourceUsage
+  $uapi->scope = 'ResourceUsage';
+  $res = $uapi->get_usages();
+  foreach($res->{'data'} as $usage) {
+    // description, error, formatter, id, maximum, url, usage
+    $data1[] = $usage->{'description'} . ": " . $usage->{'usage'};
+  }
+
+  // Get sysinfo
+  $cparray = array(
+    "cpanel_jsonapi_module" => "Stats",
+    "cpanel_jsonapi_func"   => "sysinfo",
+    "domain"                => $domain,
+  );
+  list($result, $data2) = call_cpanel($cparray);
+  if ($result === false) {
+    trigger_error( "get stats2 failed", E_USER_NOTICE);
+  }
+
+  $data = array_merge($data1,$data2);
+  sort($data);
   return($data);
 }
 
