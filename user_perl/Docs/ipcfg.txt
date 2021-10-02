@@ -1,0 +1,72 @@
+=======DOS==========
+
+/dos/FDOS/ARACHNE/ARACHNE.CFG
+/dos/FDOS/MTCP.CFG
+/dos/FDOS/WATTCP.CFG
+/dos/NETWORK/APPS/WATT32/OTHER/WATTCP.CFG
+
+/dos/NETWORK/DRIVERS/NTCPDRV/NTCPCFG.BAT
+
+/dos/NETWORK/APPS/SIOUX/CGI_BIN/CGITEST.BAS
+
+/dos/FDOS/hosts
+/dos/NETWORK/APPS/WATT32/OTHER/HOSTS
+
+/etc/hosts
+/home/Chris/user_perl/GetHosts.pm
+
+=====VAX==================
+
+OpenVMS (TM) VAX Version V7.3
+
+%TCPIP-I-INFO, TCP/IP Services startup beginning at 26-JAN-2016 21:53:53.45
+%TCPIP-I-NORMAL, timezone information verified
+Message from user INTERnet on CPVAX
+INTERnet Loaded
+%RUN-S-PROC_ID, identification of created process is 00000211
+%TCPIP-I-SETLOCAL, setting domain and/or local host
+%TCPIP-I-STARTCOMM, starting communication
+
+set def SYS$MANAGER
+@TCPIP$CONFIG.COM
+  "Core Environment", submenu "Interfaces
+
+=====TCP=================
+
+dosbox=10
+cpdos =20
+cpvax =30
+
+--VAX--
+IP_Addr          = 192.168.1.30
+NETWRK           = 255.255.255.0
+BRDCST           = 192.168.1.255
+
+Gateway          = 192.168.1.254
+DNS              =
+
+--DOSBOX--
+ip               = 192.168.1.10
+netmask          = 255.255.255.0
+gateway          = 192.168.1.254
+dns              = 192.168.1.254
+
+--CMLAPTOP--
+IPv4 Address     = 192.168.1.64
+Subnet Mask      = 255.255.255.0
+Default Gateway  = 192.168.1.254
+DNS Servers      = 192.168.1.254
+
+--CMROUTER(WAN)--
+IP               = 108.180.114.189
+netmask          = 255.255.255.0
+GWAY             = 108.180.112.1
+DNS              =  75.153.176.1
+
+--DHCP--
+begin subnet     = 192.168.1.1
+begin dhcp       = 192.168.1.64
+end   dhcp       = 192.168.1.253
+end   subnet     = 192.168.1.254
+
+========================
