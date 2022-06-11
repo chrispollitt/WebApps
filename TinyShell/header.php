@@ -32,7 +32,7 @@
 	if (!defined('SHELL_USERNAME') || !defined('SHELL_PASSWORD')) require("core/config_missing.php");
 	
 	// UNDO MAGIC QUOTES
-	if(get_magic_quotes_gpc()) {
+	if(0) {
 		function undo_magic_quotes($array) {
 			return is_array($array) ? array_map('undo_magic_quotes', $array) : stripslashes($array);
 		}

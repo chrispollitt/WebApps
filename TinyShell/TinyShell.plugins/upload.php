@@ -25,7 +25,7 @@ require("../plugin.php");
 
 if (is_ajax()) {
 if ($_POST['action'] = 'form'):?>
-<?echo "<?xml version='1.0' encoding='utf-8'?>\n"?>
+<?php echo "<?xml version='1.0' encoding='utf-8'?>\n"?>
 <?php if($_SERVER["REQUEST_METHOD"] == "OPTIONS") {exit;} ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="da-DK" lang="da-DK">
@@ -91,7 +91,7 @@ if ($_POST['action'] = 'form'):?>
 	</form>
 </body>
 </html>
-<?endif;
+<?php endif;
 
 exit;
 }

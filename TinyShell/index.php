@@ -1,4 +1,10 @@
 <?php
+
+error_reporting(E_ALL);
+ini_set("log_errors", 1);
+ini_set("error_log", "php-error.log");
+error_log( "Hello, errors!" );
+
 	/*
 	Copyright (c) 2010 Theis Mackeprang
 
@@ -21,13 +27,11 @@
 	THE SOFTWARE.
 	*/
 	
-	$logto = "file";
-	require_once("logerrors.php");
 	if( !ini_get('safe_mode') ) {
-	  trigger_error('shell mode', E_USER_NOTICE);
+	  //echo('shell mode');
 	}
 	else {
-	  trigger_error('safe_mode_exec_dir='.ini_get('safe_mode_exec_dir'), E_USER_NOTICE);
+	  //echo('safe_mode_exec_dir='.ini_get('safe_mode_exec_dir'));
 	}
 	require_once("header.php");
 	session_regenerate_id(false);

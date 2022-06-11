@@ -38,4 +38,4 @@
 	<div id='terminal-history'><div class='pre'>TinyShell&gt; help install<br />Welcome to TinyShell!<br />&nbsp;<br />You have not configured TinyShell yet.<br />Please complete the following steps:<br />&nbsp;<br />1. Update config-example.php with desired username and password<br />2. Rename config-example.php to config.php<br />3. Reload this page<br /><span class='cursor'>&nbsp;</span></div></div>
 </body>
 </html>
-<?exit;?>
+<?php exit  ; ?>

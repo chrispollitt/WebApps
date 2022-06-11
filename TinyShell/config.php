@@ -21,6 +21,6 @@
 	putenv("PATH=/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin:/home/whatwelo/bin:/home/whatwelo/local/usr/bin");
 	
 	// PROFILE
-	define('PROFILE', 'fortune -s|cowsay');
+	define('PROFILE', 'hostname');
 
 ?>

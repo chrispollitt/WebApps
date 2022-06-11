@@ -26,11 +26,6 @@
 	
 	///////////////////
 	
-	if(!function_exists("errorSetup")) {
-	  $logto = "file";
-      require_once("logerrors.php");
-	}
-	
 	if(!function_exists("myencode")) {
       require_once("myencode.php");
 	}
