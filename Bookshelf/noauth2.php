@@ -24,6 +24,7 @@ if (empty($_SESSION['thresholds'])) {
     $_SESSION['thresholds'] = [
         'min_time_to_submit_ms' => rand(2500, 5000),   // Total time on page. Increased to account for button delay.
         'min_mouse_travel_px'   => rand(50, 150),      // Minimum mouse travel distance.
+        'min_swipe_distance_px' => rand(100, 300),     // Minimum swipe distance for touch devices.
         'button_appear_delay_ms'=> rand(2000, 4000),   // How long to wait before showing the real button.
         'min_reaction_time_ms'  => rand(150, 400),     // (REACTION mode) Minimum time between button fade-in and click.
     ];
@@ -63,12 +64,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log("CAPTCHA Failure: Submission was too fast ({$timeToSubmit}ms, threshold {$thresholds['min_time_to_submit_ms']}ms).");
     }
 
-    // 4. Mouse Movement Check: Ensures there was some mouse activity.
+    // 4. Movement Check: Use swipe distance if provided (touch devices), else mouse travel.
     $mouseTravelDistance = isset($_POST['mouse_travel']) ? (int)$_POST['mouse_travel'] : 0;
-    if ($checksPassed && $mouseTravelDistance < $thresholds['min_mouse_travel_px']) {
-        $checksPassed = false;
-        $errorMessage = 'Verification failed (MT).';
-        error_log("CAPTCHA Failure: Insufficient mouse travel ({$mouseTravelDistance}px, threshold {$thresholds['min_mouse_travel_px']}px).");
+    $swipeDistance = isset($_POST['swipe_distance']) ? (int)$_POST['swipe_distance'] : 0;
+    if ($checksPassed) {
+        if ($swipeDistance > 0) {
+            // Touch device: Check swipe distance
+            if ($swipeDistance < $thresholds['min_swipe_distance_px']) {
+                $checksPassed = false;
+                $errorMessage = 'Verification failed (SD).';
+                error_log("CAPTCHA Failure: Insufficient swipe distance ({$swipeDistance}px, threshold {$thresholds['min_swipe_distance_px']}px).");
+            }
+        } else {
+            // Non-touch: Check mouse travel
+            if ($mouseTravelDistance < $thresholds['min_mouse_travel_px']) {
+                $checksPassed = false;
+                $errorMessage = 'Verification failed (MT).';
+                error_log("CAPTCHA Failure: Insufficient mouse travel ({$mouseTravelDistance}px, threshold {$thresholds['min_mouse_travel_px']}px).");
+            }
+        }
     }
 
     // 5. Behavioral Check (Mode-Dependent)
@@ -192,6 +206,48 @@ $jsConfig = [
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        .swipe-container {
+            position: relative;
+            width: 100%;
+            height: 50px;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 5.0s ease-in-out;
+            touch-action: pan-y; /* Allow vertical scrolling if needed */
+        }
+        .swipe-container.visible {
+            opacity: 1;
+        }
+        .swipe-handle {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 50px;
+            height: 50px;
+            background-color: #007bff;
+            border-radius: 8px;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            user-select: none;
+        }
+        .swipe-handle.swiping {
+            transition: none;
+        }
+        .swipe-text {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            font-size: 16px;
+            pointer-events: none;
+        }
         .result {
             margin-top: 20px;
             font-weight: bold;
@@ -216,10 +272,11 @@ $jsConfig = [
             <!-- 3. Hidden fields for client metrics -->
             <input type="hidden" id="time_to_submit" name="time_to_submit">
             <input type="hidden" id="mouse_travel" name="mouse_travel">
+            <input type="hidden" id="swipe_distance" name="swipe_distance">
             <input type="hidden" id="reaction_time" name="reaction_time">
             <input type="hidden" id="click_count" name="click_count">
 
-            <!-- 4. Real button will be injected here by JS -->
+            <!-- 4. Real button or swipe will be injected here by JS -->
             <div class="button-container" id="button-container"></div>
         </form>
 
@@ -238,6 +295,7 @@ $jsConfig = [
         const pageLoadTime = Date.now();
         let lastMousePos = { x: -1, y: -1 };
         let totalMouseTravel = 0;
+        let totalSwipeDistance = 0;
         let buttonAppearTime = 0;
         let clickCounter = 0;
 
@@ -249,79 +307,181 @@ $jsConfig = [
         // --- Hidden Inputs ---
         const timeToSubmitInput = document.getElementById('time_to_submit');
         const mouseTravelInput = document.getElementById('mouse_travel');
+        const swipeDistanceInput = document.getElementById('swipe_distance');
         const reactionTimeInput = document.getElementById('reaction_time');
         const clickCountInput = document.getElementById('click_count');
 
-        // --- 1. Track total mouse travel distance ---
-        document.addEventListener('mousemove', function(e) {
-            if (lastMousePos.x > -1) {
-                const dx = e.clientX - lastMousePos.x;
-                const dy = e.clientY - lastMousePos.y;
-                totalMouseTravel += Math.sqrt(dx*dx + dy*dy);
-            }
-            lastMousePos = { x: e.clientX, y: e.clientY };
-        }, { passive: true });
+        // --- Detect touch device ---
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
 
-        // --- 2. Create and show the real button after a delay ---
-        setTimeout(function() {
-            const realButton = document.createElement('button');
-            realButton.id = config.realButtonId;
-            realButton.type = 'button'; // Use 'button' to prevent form submission until we are ready
-            realButton.className = 'continue-button';
-            realButton.textContent = config.initialButtonText;
-
-            buttonContainer.appendChild(realButton);
-
-            // Use a tiny delay before adding 'visible' class to ensure the CSS transition runs.
-            setTimeout(() => {
-                realButton.classList.add('visible');
-                buttonAppearTime = Date.now();
-            }, 30);
-
-        }, config.buttonAppearDelay);
-
-
-        // --- 3. Handle clicks on the dynamically created button ---
-        buttonContainer.addEventListener('click', function(event) {
-            const clickedElement = event.target;
-            // Ensure the click is on our real button and not somewhere else in the container
-            if (clickedElement.id !== config.realButtonId) {
-                return;
-            }
-
-            clickCounter++;
-            clickCountInput.value = clickCounter;
-
-            // --- MODE 1: Ignore Clicks (Experimental) ---
-            if (config.captchaMode === 'IGNORE_CLICKS') {
-                const clicksRemaining = (config.clicksToIgnore + 1) - clickCounter;
-                if (clicksRemaining > 0) {
-                    statusMessage.textContent = `We are running a quick check to verify you're a human ${clicksRemaining}`;
-                    // Wiggle the button to give feedback
-                    clickedElement.style.transform = 'translateX(-5px)';
-                    setTimeout(() => { clickedElement.style.transform = ''; }, 100);
-                    return; // Don't submit yet
+        // --- 1. Track total mouse travel distance (for non-touch devices) ---
+        if (!isTouchDevice) {
+            document.addEventListener('mousemove', function(e) {
+                if (lastMousePos.x > -1) {
+                    const dx = e.clientX - lastMousePos.x;
+                    const dy = e.clientY - lastMousePos.y;
+                    totalMouseTravel += Math.sqrt(dx*dx + dy*dy);
                 }
+                lastMousePos = { x: e.clientX, y: e.clientY };
+            }, { passive: true });
+        }
+
+        // --- 2. Create and show the interaction element after a delay ---
+        setTimeout(function() {
+            if (isTouchDevice) {
+                // Create swipe container for touch devices
+                const swipeContainer = document.createElement('div');
+                swipeContainer.id = config.realButtonId;
+                swipeContainer.className = 'swipe-container';
+
+                const swipeHandle = document.createElement('div');
+                swipeHandle.className = 'swipe-handle';
+                swipeHandle.textContent = '>>';
+
+                const swipeText = document.createElement('div');
+                swipeText.className = 'swipe-text';
+                swipeText.textContent = 'Swipe to Continue';
+
+                swipeContainer.appendChild(swipeHandle);
+                swipeContainer.appendChild(swipeText);
+                buttonContainer.appendChild(swipeContainer);
+
+                // Track swipe
+                let swipeStartX = 0;
+                let swipeCurrentX = 0;
+                let isSwiping = false;
+
+                swipeContainer.addEventListener('touchstart', function(e) {
+                    if (e.touches.length === 1) {
+                        isSwiping = true;
+                        swipeStartX = e.touches[0].clientX;
+                        swipeCurrentX = swipeStartX;
+                        swipeHandle.classList.add('swiping');
+                        if (buttonAppearTime === 0) {
+                            buttonAppearTime = Date.now(); // Start reaction time on first touch
+                        }
+                    }
+                }, { passive: false });
+
+                swipeContainer.addEventListener('touchmove', function(e) {
+                    if (isSwiping && e.touches.length === 1) {
+                        e.preventDefault(); // Prevent scrolling
+                        const touchX = e.touches[0].clientX;
+                        const dx = touchX - swipeCurrentX;
+                        totalSwipeDistance += Math.abs(dx);
+                        swipeCurrentX = touchX;
+
+                        // Move handle visually (clamp to container width)
+                        const containerWidth = swipeContainer.offsetWidth;
+                        let handlePos = touchX - swipeStartX;
+                        handlePos = Math.max(0, Math.min(handlePos, containerWidth - 50));
+                        swipeHandle.style.transform = `translateX(${handlePos}px)`;
+                    }
+                }, { passive: false });
+
+                swipeContainer.addEventListener('touchend', function(e) {
+                    if (isSwiping) {
+                        isSwiping = false;
+                        swipeHandle.classList.remove('swiping');
+                        const containerWidth = swipeContainer.offsetWidth;
+                        const handlePos = parseInt(swipeHandle.style.transform.replace('translateX(', '').replace('px)', '')) || 0;
+
+                        clickCounter++;
+                        clickCountInput.value = clickCounter;
+
+                        // MODE 1: Ignore Clicks (adapted for swipes)
+                        if (config.captchaMode === 'IGNORE_CLICKS') {
+                            const actionsRemaining = (config.clicksToIgnore + 1) - clickCounter;
+                            if (actionsRemaining > 0) {
+                                statusMessage.textContent = `We are running a quick check to verify you're a human ${actionsRemaining}`;
+                                // Reset handle with animation
+                                swipeHandle.style.transition = 'transform 0.3s';
+                                swipeHandle.style.transform = 'translateX(0)';
+                                setTimeout(() => { swipeHandle.style.transition = ''; }, 300);
+                                return; // Don't submit yet
+                            }
+                        }
+
+                        // For REACTION mode or final swipe: Calculate reaction time as time from appear to touchend
+                        const reactionTime = Date.now() - buttonAppearTime;
+                        reactionTimeInput.value = reactionTime;
+
+                        // Visual feedback: If swiped far enough visually, "complete" it
+                        if (handlePos >= containerWidth - 50) {
+                            swipeText.textContent = config.verifyingButtonText;
+                            swipeContainer.style.pointerEvents = 'none'; // Disable further interaction
+                            submitTheForm();
+                        } else {
+                            // Not swiped fully: Reset
+                            swipeHandle.style.transition = 'transform 0.3s';
+                            swipeHandle.style.transform = 'translateX(0)';
+                            setTimeout(() => { swipeHandle.style.transition = ''; }, 300);
+                            // Decrement clickCounter since it wasn't a "successful" swipe
+                            clickCounter--;
+                            clickCountInput.value = clickCounter;
+                        }
+                    }
+                }, { passive: true });
+
+                // Fade in
+                setTimeout(() => {
+                    swipeContainer.classList.add('visible');
+                    buttonAppearTime = Date.now(); // For reaction time, but we'll override on touchstart
+                }, 30);
+            } else {
+                // Create button for non-touch devices (original logic)
+                const realButton = document.createElement('button');
+                realButton.id = config.realButtonId;
+                realButton.type = 'button'; // Use 'button' to prevent form submission until we are ready
+                realButton.className = 'continue-button';
+                realButton.textContent = config.initialButtonText;
+
+                buttonContainer.appendChild(realButton);
+
+                // Use a tiny delay before adding 'visible' class to ensure the CSS transition runs.
+                setTimeout(() => {
+                    realButton.classList.add('visible');
+                    buttonAppearTime = Date.now();
+                }, 30);
+
+                // Handle clicks (original logic)
+                buttonContainer.addEventListener('click', function(event) {
+                    const clickedElement = event.target;
+                    if (clickedElement.id !== config.realButtonId) {
+                        return;
+                    }
+
+                    clickCounter++;
+                    clickCountInput.value = clickCounter;
+
+                    if (config.captchaMode === 'IGNORE_CLICKS') {
+                        const clicksRemaining = (config.clicksToIgnore + 1) - clickCounter;
+                        if (clicksRemaining > 0) {
+                            statusMessage.textContent = `We are running a quick check to verify you're a human ${clicksRemaining}`;
+                            // Wiggle the button to give feedback
+                            clickedElement.style.transform = 'translateX(-5px)';
+                            setTimeout(() => { clickedElement.style.transform = ''; }, 100);
+                            return; // Don't submit yet
+                        }
+                    }
+
+                    const reactionTime = Date.now() - buttonAppearTime;
+                    reactionTimeInput.value = reactionTime;
+
+                    clickedElement.disabled = true;
+                    clickedElement.textContent = config.verifyingButtonText;
+
+                    submitTheForm();
+                });
             }
-
-            // --- MODE 2: Reaction Time (Recommended) ---
-            // This code runs for REACTION mode, or on the final click of IGNORE_CLICKS mode.
-            const reactionTime = Date.now() - buttonAppearTime;
-            reactionTimeInput.value = reactionTime;
-
-            // Disable button and show feedback
-            clickedElement.disabled = true;
-            clickedElement.textContent = config.verifyingButtonText;
-
-            // Populate final metrics and submit the form
-            submitTheForm();
-        });
+        }, config.buttonAppearDelay);
 
         function submitTheForm() {
             // a. Calculate time spent on page
             timeToSubmitInput.value = Date.now() - pageLoadTime;
-            // b. Store total mouse travel
+            // b. Store movement metrics
             mouseTravelInput.value = Math.round(totalMouseTravel);
+            swipeDistanceInput.value = Math.round(totalSwipeDistance);
 
             // c. Submit the form
             form.submit();
