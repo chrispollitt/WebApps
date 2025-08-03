@@ -1,10 +1,18 @@
 <?php
 // --- CONFIGURATION ---
+
+// -- Core Settings --
 define('COOKIE_NAME', 'noauth');
 define('COOKIE_VALUE', 'VerifiedHuman_SomeLongRandomString_98765');
 define('COOKIE_EXPIRATION_DAYS', 30);
+// Choose the verification mode:
+//   'REACTION' (Recommended): Verifies the user based on the time between the button appearing and their click.
+//   'IGNORE_CLICKS' (Experimental): Verifies the user only after they have clicked the button a certain number of times.
+define('CAPTCHA_MODE', 'IGNORE_CLICKS');
+// If using 'IGNORE_CLICKS' mode, this is the number of clicks to ignore. The user must click N+1 times.
+define('CLICKS_TO_IGNORE', 2);
 
-// Start session for CSRF, challenge tracking, and thresholds
+// -- Start session for CSRF, challenge tracking, and thresholds --
 session_start();
 
 $errorMessage = '';
@@ -12,88 +20,77 @@ $success = false;
 
 // --- Generate Per-Session Randomized Thresholds ---
 if (empty($_SESSION['thresholds'])) {
-    // Randomize thresholds so bots can't hardcode
+    // Randomize thresholds so bots can't hardcode them.
     $_SESSION['thresholds'] = [
-        'min_time_to_submit' => rand(450, 1200), // ms
-        'min_mouse_travel' => rand(80, 200),     // px
-        'min_keyboard_events' => rand(1, 4),     // keystrokes
-        'pow_difficulty' => rand(2, 3),          // proof-of-work: leading zeros
+        'min_time_to_submit_ms' => rand(2500, 5000),   // Total time on page. Increased to account for button delay.
+        'min_mouse_travel_px'   => rand(50, 150),      // Minimum mouse travel distance.
+        'button_appear_delay_ms'=> rand(2000, 4000),   // How long to wait before showing the real button.
+        'min_reaction_time_ms'  => rand(150, 400),     // (REACTION mode) Minimum time between button fade-in and click.
     ];
 }
 $thresholds = $_SESSION['thresholds'];
 
-// --- Generate a random honeypot field name per session ---
-if (empty($_SESSION['honeypot_name'])) {
-    $_SESSION['honeypot_name'] = 'trap_' . bin2hex(random_bytes(4));
+// --- Generate a unique ID for the real button per session ---
+if (empty($_SESSION['real_button_id'])) {
+    $_SESSION['real_button_id'] = 'btn-real-' . bin2hex(random_bytes(6));
 }
-$honeypotName = $_SESSION['honeypot_name'];
-
-// --- Generate proof-of-work challenge per session (optional) ---
-if (empty($_SESSION['pow_challenge'])) {
-    $_SESSION['pow_challenge'] = bin2hex(random_bytes(6));
-}
-$powChallenge = $_SESSION['pow_challenge'];
+$realButtonId = $_SESSION['real_button_id'];
 
 // --- SERVER-SIDE VERIFICATION LOGIC ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $checksPassed = true;
-    error_log('CAPTCHA testing started...');
+    error_log('CAPTCHA verification started...');
 
-    // 1. CSRF token check
+    // 1. CSRF Token Check: Prevents cross-site request forgery.
     if (!isset($_POST['challenge_token']) || !hash_equals($_SESSION['challenge_token'], $_POST['challenge_token'])) {
         $checksPassed = false;
         $errorMessage = 'Session expired or invalid. Please reload the page.';
+        error_log('CAPTCHA Failure: CSRF token mismatch.');
     }
 
-    // 2. Honeypot check
-    if ($checksPassed && (!isset($_POST[$honeypotName]) || !empty($_POST[$honeypotName]))) {
+    // 2. Honeypot Button Check: Checks if the invisible honeypot button was clicked.
+    if ($checksPassed && isset($_POST['honeypot_submit'])) {
         $checksPassed = false;
-        $errorMessage = 'Automatic verification failed (honeypot).';
-        error_log('CAPTCHA Failure: Honeypot field was filled.');
+        $errorMessage = 'Automatic verification failed (HP).';
+        error_log('CAPTCHA Failure: Honeypot submit button was clicked.');
     }
 
-    // 3. Time to submit
+    // 3. Time on Page Check: Ensures the user didn't submit the form inhumanly fast.
     $timeToSubmit = isset($_POST['time_to_submit']) ? (int)$_POST['time_to_submit'] : 0;
-    if ($checksPassed && $timeToSubmit < $thresholds['min_time_to_submit']) {
+    if ($checksPassed && $timeToSubmit < $thresholds['min_time_to_submit_ms']) {
         $checksPassed = false;
-        $errorMessage = 'You submitted too quickly. (0xT)';
-        error_log("CAPTCHA Failure: Submission was too fast ({$timeToSubmit}ms, threshold {$thresholds['min_time_to_submit']}ms).");
+        $errorMessage = 'Verification failed (TF1).';
+        error_log("CAPTCHA Failure: Submission was too fast ({$timeToSubmit}ms, threshold {$thresholds['min_time_to_submit_ms']}ms).");
     }
 
-    // 4. Mouse movement
+    // 4. Mouse Movement Check: Ensures there was some mouse activity.
     $mouseTravelDistance = isset($_POST['mouse_travel']) ? (int)$_POST['mouse_travel'] : 0;
-    if ($checksPassed && $mouseTravelDistance < $thresholds['min_mouse_travel']) {
+    if ($checksPassed && $mouseTravelDistance < $thresholds['min_mouse_travel_px']) {
         $checksPassed = false;
-        $errorMessage = 'Not enough mouse movement detected. (0xM)';
-        error_log("CAPTCHA Failure: Insufficient mouse travel ({$mouseTravelDistance}px, threshold {$thresholds['min_mouse_travel']}px).");
+        $errorMessage = 'Verification failed (MT).';
+        error_log("CAPTCHA Failure: Insufficient mouse travel ({$mouseTravelDistance}px, threshold {$thresholds['min_mouse_travel_px']}px).");
     }
 
-    /* 5. Keyboard activity
-    $keyboardEvents = isset($_POST['keyboard_events']) ? (int)$_POST['keyboard_events'] : 0;
-    if ($checksPassed && $keyboardEvents < $thresholds['min_keyboard_events']) {
-        $checksPassed = false;
-        $errorMessage = 'Not enough keyboard interaction. (0xK)';
-        error_log("CAPTCHA Failure: Insufficient keyboard events ({$keyboardEvents}, threshold {$thresholds['min_keyboard_events']}).");
-    } */
-
-    // 6. Browser fingerprint
-    $browserFp = $_POST['browser_fp'] ?? '';
-    if ($checksPassed && empty($browserFp)) {
-        $checksPassed = false;
-        $errorMessage = 'Browser fingerprint was missing. (0xF)';
-        error_log('CAPTCHA Failure: Browser fingerprint was missing.');
-    }
-
-    // 7. (Optional) Proof-of-work
-    $powSolution = $_POST['pow_solution'] ?? '';
+    // 5. Behavioral Check (Mode-Dependent)
     if ($checksPassed) {
-        $expectedPrefix = str_repeat('0', $thresholds['pow_difficulty']);
-        if (empty($powSolution) || substr(hash('sha256', $powChallenge . $powSolution), 0, $thresholds['pow_difficulty']) !== $expectedPrefix) {
-            //$checksPassed = false;
-            $errorMessage = 'Proof-of-work challenge failed (0xP).';
-            error_log("CAPTCHA Failure: PoW failed ({$powSolution}, difficulty {$thresholds['pow_difficulty']}).");
+        if (CAPTCHA_MODE === 'REACTION') {
+            $reactionTime = isset($_POST['reaction_time']) ? (int)$_POST['reaction_time'] : 0;
+            if ($reactionTime < $thresholds['min_reaction_time_ms']) {
+                $checksPassed = false;
+                $errorMessage = 'Verification failed (TF2).';
+                error_log("CAPTCHA Failure: Reaction time was too fast ({$reactionTime}ms, threshold {$thresholds['min_reaction_time_ms']}ms).");
+            }
+        } elseif (CAPTCHA_MODE === 'IGNORE_CLICKS') {
+            $clickCount = isset($_POST['click_count']) ? (int)$_POST['click_count'] : 0;
+            // The successful click is N+1.
+            if ($clickCount <= CLICKS_TO_IGNORE) {
+                $checksPassed = false;
+                $errorMessage = 'Verification failed (NEC).';
+                error_log("CAPTCHA Failure: Not enough clicks in IGNORE_CLICKS mode (got {$clickCount}, needed > " . CLICKS_TO_IGNORE . ").");
+            }
         }
     }
+
 
     // --- FINAL DECISION ---
     if ($checksPassed) {
@@ -105,8 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
             'httponly' => true
         ]);
-        // Clean up session for challenge
-        unset($_SESSION['challenge_token'], $_SESSION['pow_challenge'], $_SESSION['honeypot_name'], $_SESSION['thresholds']);
+        // Clean up session data
+        unset($_SESSION['challenge_token'], $_SESSION['thresholds'], $_SESSION['real_button_id']);
+
         $target = filter_input(INPUT_GET, 'target', FILTER_SANITIZE_URL);
         $destination = ($target && strpos($target, '/') === 0) ? $target : '/';
         header('Location: ' . $destination);
@@ -117,8 +115,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Generate a new, unique token for this page load.
 $_SESSION['challenge_token'] = bin2hex(random_bytes(32));
-?>
-<!DOCTYPE html>
+
+// Prepare a configuration object to pass to JavaScript securely.
+$jsConfig = [
+    'captchaMode' => CAPTCHA_MODE,
+    'clicksToIgnore' => CLICKS_TO_IGNORE,
+    'buttonAppearDelay' => $thresholds['button_appear_delay_ms'],
+    'realButtonId' => $realButtonId,
+    'initialButtonText' => 'Click to Continue',
+    'verifyingButtonText' => 'Verifying...'
+];
+
+?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -148,14 +156,19 @@ $_SESSION['challenge_token'] = bin2hex(random_bytes(32));
             font-size: 24px;
             margin-bottom: 20px;
         }
-        p, .thresholds {
+        p {
             font-size: 16px;
             color: #666;
+            min-height: 48px; /* Reserve space for message */
         }
-        .honeypot {
+        .honeypot-button {
             position: absolute;
             left: -9999px;
             top: -9999px;
+        }
+        .button-container {
+            min-height: 50px; /* Prevent layout shift when button appears */
+            margin-top: 20px;
         }
         .continue-button {
             padding: 12px 25px;
@@ -166,8 +179,11 @@ $_SESSION['challenge_token'] = bin2hex(random_bytes(32));
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.2s, opacity 0.2s;
-            margin-top: 20px;
+            transition: background-color 0.2s, opacity 2.5s ease-in-out;
+            opacity: 0; /* Start invisible */
+        }
+        .continue-button.visible {
+            opacity: 1; /* Fade to visible */
         }
         .continue-button:hover {
             background-color: #0056b3;
@@ -183,78 +199,58 @@ $_SESSION['challenge_token'] = bin2hex(random_bytes(32));
             color: #dc3545;
             min-height: 24px;
         }
-        .spinner {
-            display: inline-block;
-            width: 18px;
-            height: 18px;
-            border: 3px solid #ccc;
-            border-radius: 50%;
-            border-top: 3px solid #007bff;
-            animation: spin 1s linear infinite;
-            margin-left: 8px;
-            vertical-align: middle;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg);}
-            100% { transform: rotate(360deg);}
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Please Wait</h1>
-        <p>We are just checking a few things before we send you on your way.</p>
-        <div class="thresholds" style="display:none;">
-            <!-- These can be shown for troubleshooting -->
-            Min time: <?php echo htmlspecialchars($thresholds['min_time_to_submit']); ?>ms,
-            Min mouse: <?php echo htmlspecialchars($thresholds['min_mouse_travel']); ?>px,
-            Min keyboard: <?php echo htmlspecialchars($thresholds['min_keyboard_events']); ?>,
-            PoW difficulty: <?php echo htmlspecialchars($thresholds['pow_difficulty']); ?>
-        </div>
-        <form id="verification-form" method="POST" autocomplete="off" spellcheck="false">
-            <!-- 1. Randomized honeypot field -->
-            <div class="honeypot" aria-hidden="true">
-                <label for="<?php echo htmlspecialchars($honeypotName); ?>">Leave blank</label>
-                <input type="text" id="<?php echo htmlspecialchars($honeypotName); ?>" name="<?php echo htmlspecialchars($honeypotName); ?>" tabindex="-1" autocomplete="off">
-            </div>
+        <p id="status-message">We are running a quick check to verify you're a human.</p>
+
+        <form id="verification-form" method="POST" autocomplete="off">
+            <!-- 1. Honeypot Button: For simple bots. It's a submit button hidden off-screen. -->
+            <button type="submit" name="honeypot_submit" class="honeypot-button" tabindex="-1" aria-hidden="true">Submit</button>
+
             <!-- 2. Security Token -->
             <input type="hidden" name="challenge_token" value="<?php echo htmlspecialchars($_SESSION['challenge_token']); ?>">
+
             <!-- 3. Hidden fields for client metrics -->
             <input type="hidden" id="time_to_submit" name="time_to_submit">
             <input type="hidden" id="mouse_travel" name="mouse_travel">
-            <input type="hidden" id="keyboard_events" name="keyboard_events">
-            <input type="hidden" id="browser_fp" name="browser_fp">
-            <!-- Proof-of-work -->
-            <input type="hidden" id="pow_solution" name="pow_solution">
-            <button type="submit" id="continue-btn" class="continue-button">Click here to Continue</button>
-            <span id="loading-spinner" class="spinner" style="display:none;"></span>
+            <input type="hidden" id="reaction_time" name="reaction_time">
+            <input type="hidden" id="click_count" name="click_count">
+
+            <!-- 4. Real button will be injected here by JS -->
+            <div class="button-container" id="button-container"></div>
         </form>
+
         <div id="result-display" class="result">
             <?php echo htmlspecialchars($errorMessage); ?>
         </div>
     </div>
+
     <script>
     (function() {
         "use strict";
+        // --- Configuration from PHP ---
+        const config = <?php echo json_encode($jsConfig); ?>;
+
         // --- State variables ---
         const pageLoadTime = Date.now();
         let lastMousePos = { x: -1, y: -1 };
         let totalMouseTravel = 0;
-        let keyboardEvents = 0;
+        let buttonAppearTime = 0;
+        let clickCounter = 0;
 
         // --- DOM Elements ---
         const form = document.getElementById('verification-form');
-        const button = document.getElementById('continue-btn');
-        const spinner = document.getElementById('loading-spinner');
+        const buttonContainer = document.getElementById('button-container');
+        const statusMessage = document.getElementById('status-message');
+
+        // --- Hidden Inputs ---
         const timeToSubmitInput = document.getElementById('time_to_submit');
         const mouseTravelInput = document.getElementById('mouse_travel');
-        const keyboardEventsInput = document.getElementById('keyboard_events');
-        const browserFpInput = document.getElementById('browser_fp');
-        const powSolutionInput = document.getElementById('pow_solution');
-
-        // --- Thresholds from PHP (for client-side PoW) ---
-        const powChallenge = "<?php echo $powChallenge; ?>";
-        const powDifficulty = <?php echo (int)$thresholds['pow_difficulty']; ?>;
+        const reactionTimeInput = document.getElementById('reaction_time');
+        const clickCountInput = document.getElementById('click_count');
 
         // --- 1. Track total mouse travel distance ---
         document.addEventListener('mousemove', function(e) {
@@ -266,103 +262,70 @@ $_SESSION['challenge_token'] = bin2hex(random_bytes(32));
             lastMousePos = { x: e.clientX, y: e.clientY };
         }, { passive: true });
 
-        // --- 2. Track keyboard events (focus on this page only) ---
-        form.addEventListener('keydown', function(e) {
-            // Only count printable keys
-            if (e.key.length === 1) keyboardEvents++;
-        }, true);
+        // --- 2. Create and show the real button after a delay ---
+        setTimeout(function() {
+            const realButton = document.createElement('button');
+            realButton.id = config.realButtonId;
+            realButton.type = 'button'; // Use 'button' to prevent form submission until we are ready
+            realButton.className = 'continue-button';
+            realButton.textContent = config.initialButtonText;
 
-        // --- 3. Gather a basic browser fingerprint ---
-        function getBrowserFingerprint() {
-            const fp = {
-                ua: navigator.userAgent,
-                lang: navigator.language,
-                res: `${screen.width}x${screen.height}`,
-                cd: screen.colorDepth,
-                tz: new Date().getTimezoneOffset(),
-                plat: navigator.platform,
-                vendor: navigator.vendor
-            };
-            // FIX: Return the stringified object directly, do not hash it.
-            // The server only checks if this field is empty, not its content.
-            return JSON.stringify(fp);
-        }
+            buttonContainer.appendChild(realButton);
 
-        // --- 4. Simple JS SHA-256 (for PoW and fingerprint) ---
-        // Source: https://geraintluff.github.io/sha256/
-        function sha256(ascii) {
-            function rightRotate(v, amt) { return (v>>>amt) | (v<<(32-amt)); }
-            var mathPow=Math.pow,max=Math.max,imul=Math.imul;
-            var result=[],k=[],hash=[],W=new Array(64),i,j;
-            var s1,s0,maj,ch,temp1,temp2;
-            var H=[1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225];
-            for(var i=0;i<64;i++)k[i]=Math.floor(mathPow(2,32)*Math.abs(Math.sin(i+1)));
-            ascii += '\x80'; var l=ascii.length/4+2; var N=Math.ceil(l/16); var M=new Array(N);
-            for(i=0;i<N;i++){M[i]=new Array(16);for(j=0;j<16;j++)M[i][j]=0;}
-            for(i=0;i<ascii.length;i++)M[i>>6][i%64>>2]|=ascii.charCodeAt(i)<<((3-i%4)*8);
-            M[N-1][14]=((ascii.length-1)*8)/Math.pow(2,32)|0;M[N-1][15]=((ascii.length-1)*8)&0xffffffff;
-            for(i=0;i<N;i++){
-                for(j=0;j<16;j++)W[j]=M[i][j];
-                for(j=16;j<64;j++) W[j]=(((W[j-2]>>>17|W[j-2]<<15)^(W[j-2]>>>19|W[j-2]<<13)^(W[j-2]>>>10))+W[j-7]|0)+
-                    (((W[j-15]>>>7|W[j-15]<<25)^(W[j-15]>>>18|W[j-15]<<14)^(W[j-15]>>>3))+W[j-16]|0)|0;
-                var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
-                for(j=0;j<64;j++){
-                    s1=(e>>>6|e<<26)^(e>>>11|e<<21)^(e>>>25|e<<7);
-                    ch=(e&f)^((~e)&g);temp1=(h+s1+ch+k[j]+W[j])|0;
-                    s0=(a>>>2|a<<30)^(a>>>13|a<<19)^(a>>>22|a<<10);
-                    maj=(a&b)^(a&c)^(b&c);temp2=(s0+maj)|0;
-                    h=g;g=f;f=e;e=(d+temp1)|0;d=c;c=b;b=a;a=(temp1+temp2)|0;
-                }
-                H[0]=(H[0]+a)|0;H[1]=(H[1]+b)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;
-                H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+            // Use a tiny delay before adding 'visible' class to ensure the CSS transition runs.
+            setTimeout(() => {
+                realButton.classList.add('visible');
+                buttonAppearTime = Date.now();
+            }, 30);
+
+        }, config.buttonAppearDelay);
+
+
+        // --- 3. Handle clicks on the dynamically created button ---
+        buttonContainer.addEventListener('click', function(event) {
+            const clickedElement = event.target;
+            // Ensure the click is on our real button and not somewhere else in the container
+            if (clickedElement.id !== config.realButtonId) {
+                return;
             }
-            for(i=0;i<H.length;i++)for(j=3;j+1;j--)result.push(('00'+((H[i]>>(j*8))&255).toString(16)).slice(-2));
-            return result.join('');
-        }
 
-        // --- 5. Proof-of-work (find a nonce so hash(challenge+nonce) has N leading zeros) ---
-        async function doProofOfWork(challenge, difficulty) {
-            return new Promise(function(resolve) {
-                let nonce = 0;
-                let prefix = '0'.repeat(difficulty);
-                function tryNonce() {
-                    for (let i = 0; i < 1000; i++) {
-                        let test = sha256(challenge + nonce);
-                        if (test.substring(0, difficulty) === prefix) {
-                            resolve(nonce.toString());
-                            return;
-                        }
-                        nonce++;
-                    }
-                    setTimeout(tryNonce, 0); // Yield to UI thread
+            clickCounter++;
+            clickCountInput.value = clickCounter;
+
+            // --- MODE 1: Ignore Clicks (Experimental) ---
+            if (config.captchaMode === 'IGNORE_CLICKS') {
+                const clicksRemaining = (config.clicksToIgnore + 1) - clickCounter;
+                if (clicksRemaining > 0) {
+                    statusMessage.textContent = `We are running a quick check to verify you're a human. ${clicksRemaining}`;
+                    // Wiggle the button to give feedback
+                    clickedElement.style.transform = 'translateX(-5px)';
+                    setTimeout(() => { clickedElement.style.transform = ''; }, 100);
+                    return; // Don't submit yet
                 }
-                tryNonce();
-            });
-        }
+            }
 
-        // --- 6. Form Submission Logic ---
-        form.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            // UI feedback
-            button.disabled = true;
-            spinner.style.display = "inline-block";
-            button.textContent = "Verifying...";
+            // --- MODE 2: Reaction Time (Recommended) ---
+            // This code runs for REACTION mode, or on the final click of IGNORE_CLICKS mode.
+            const reactionTime = Date.now() - buttonAppearTime;
+            reactionTimeInput.value = reactionTime;
 
+            // Disable button and show feedback
+            clickedElement.disabled = true;
+            clickedElement.textContent = config.verifyingButtonText;
+
+            // Populate final metrics and submit the form
+            submitTheForm();
+        });
+
+        function submitTheForm() {
             // a. Calculate time spent on page
             timeToSubmitInput.value = Date.now() - pageLoadTime;
             // b. Store total mouse travel
             mouseTravelInput.value = Math.round(totalMouseTravel);
-            // c. Store total keyboard events
-            keyboardEventsInput.value = keyboardEvents;
-            // d. Store browser fingerprint
-            browserFpInput.value = getBrowserFingerprint();
 
-            // e. Do proof-of-work
-            powSolutionInput.value = await doProofOfWork(powChallenge, powDifficulty);
-
-            // Now submit
+            // c. Submit the form
             form.submit();
-        });
+        }
     })();
   </script>
 </body>
