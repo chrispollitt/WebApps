@@ -179,7 +179,7 @@ $jsConfig = [
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.2s, opacity 2.5s ease-in-out;
+            transition: background-color 0.2s, opacity 5.0s ease-in-out;
             opacity: 0; /* Start invisible */
         }
         .continue-button.visible {
@@ -204,7 +204,7 @@ $jsConfig = [
 <body>
     <div class="container">
         <h1>Please Wait</h1>
-        <p id="status-message">We are running a quick check to verify you're a human.</p>
+        <p id="status-message">We are running a quick check to verify you're a human...</p>
 
         <form id="verification-form" method="POST" autocomplete="off">
             <!-- 1. Honeypot Button: For simple bots. It's a submit button hidden off-screen. -->
@@ -296,7 +296,7 @@ $jsConfig = [
             if (config.captchaMode === 'IGNORE_CLICKS') {
                 const clicksRemaining = (config.clicksToIgnore + 1) - clickCounter;
                 if (clicksRemaining > 0) {
-                    statusMessage.textContent = `We are running a quick check to verify you're a human. ${clicksRemaining}`;
+                    statusMessage.textContent = `We are running a quick check to verify you're a human ${clicksRemaining}`;
                     // Wiggle the button to give feedback
                     clickedElement.style.transform = 'translateX(-5px)';
                     setTimeout(() => { clickedElement.style.transform = ''; }, 100);
