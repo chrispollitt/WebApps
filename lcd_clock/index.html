@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCD Clock</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.png" type="image/png">
+<meta name="theme-color" content="#040404">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LCD Clock">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: #666;
+}
+
+#clock-wrapper {
+  display: inline-block;
+  background: #040404;
+  padding: 30px 40px;
+  user-select: none;
+  border-radius: 8px;
+  position: relative;
+  transition: opacity 0.8s;
+  transform-origin: center center;
+}
+#clock-wrapper.dimmed { opacity: 0.15; }
+#clock-wrapper.dimmed:hover { opacity: 1; }
+
+/* ── TABS ── */
+#tabs { display: flex; gap: 6px; margin-bottom: 24px; }
+.tab-btn {
+  background: transparent;
+  border: 1px solid #222;
+  color: #444;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 4px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+.tab-btn:hover, .tab-btn.active { border-color: var(--col); color: var(--col); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── ROWS & GROUPS ── */
+#date-row { display: flex; align-items: flex-end; gap: 28px; margin-bottom: 30px; }
+#time-row { display: flex; align-items: flex-end; gap: 16px; }
+.digit-group { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.date-label { font-size: 11px; letter-spacing: 2px; color: #444; font-weight: 600; }
+
+/* ── AM/PM ── */
+#ampm-stack { display: flex; flex-direction: column; gap: 8px; margin-right: 8px; padding-bottom: 24px; }
+.ampm-lbl { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--dim); }
+.ampm-lbl.active { color: var(--col); }
+
+/* ── BATTERY ── */
+#battery-row { margin-top: 36px; display: flex; align-items: center; }
+#battery-label { font-size: 13px; letter-spacing: 2px; color: #444; font-weight: 600; margin-right: 18px; }
+#battery-bars { display: flex; gap: 4px; margin-right: 16px; }
+.battery-seg { width: 18px; height: 12px; background: var(--dim); }
+.battery-seg.active { background: var(--col); }
+.pct-group { display: flex; align-items: flex-end; }
+#pct-sign { font-size: 16px; letter-spacing: 2px; color: #555; margin-left: 4px; margin-bottom: 1px; font-weight: 600; }
+
+/* ── STOPWATCH ── */
+#sw-row { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 20px; }
+#sw-btns { display: flex; gap: 10px; margin-bottom: 12px; }
+#sw-laps { max-height: 140px; overflow-y: auto; border-top: 1px solid #111; padding-top: 10px; }
+.lap-entry {
+  display: flex; justify-content: space-between;
+  font-size: 11px; letter-spacing: 2px; color: #444;
+  padding: 4px 0; border-bottom: 1px solid #0d0d0d;
+}
+.lap-entry .lap-time { color: var(--col); }
+.lap-entry.fastest .lap-time { color: #44FF88 !important; }
+.lap-entry.slowest .lap-time { color: #FF4444 !important; }
+
+/* ── ALARM PANEL ── */
+#alarm-panel-inner { width: 520px; }
+
+/* Time Picker Drum */
+.drum-picker {
+  display: flex; align-items: center; gap: 0;
+  background: #060606; border: 1px solid #1a1a1a; border-radius: 4px;
+  overflow: hidden; user-select: none;
+}
+.drum-col {
+  display: flex; flex-direction: column; align-items: center;
+  width: 52px; height: 90px; overflow: hidden; position: relative; cursor: ns-resize;
+}
+.drum-col::before, .drum-col::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 28px; z-index: 2; pointer-events: none;
+}
+.drum-col::before { top: 0; background: linear-gradient(to bottom, #060606 0%, transparent 100%); }
+.drum-col::after  { bottom: 0; background: linear-gradient(to top, #060606 0%, transparent 100%); }
+.drum-highlight {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  left: 0; right: 0; height: 30px;
+  border-top: 1px solid #222; border-bottom: 1px solid #222;
+  pointer-events: none; z-index: 1;
+}
+.drum-inner { display: flex; flex-direction: column; align-items: center; transition: transform 0.15s ease; padding-top: 30px; }
+.drum-item {
+  height: 30px; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-family: 'Courier New', monospace; letter-spacing: 2px;
+  color: #222; width: 52px; flex-shrink: 0;
+}
+.drum-item.selected { color: var(--col); }
+.drum-sep {
+  font-size: 22px; font-family: monospace; color: #333;
+  padding: 0 2px; align-self: center;
+}
+
+/* Alarm list */
+#alarm-sets-bar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.set-tab {
+  font-size: 10px; letter-spacing: 2px; color: #444; padding: 3px 10px;
+  border: 1px solid #1a1a1a; border-radius: 3px; cursor: pointer;
+  background: transparent; transition: all 0.15s;
+}
+.set-tab.active { border-color: var(--col); color: var(--col); }
+.set-tab.add-set { color: #333; }
+.set-tab.add-set:hover { color: var(--col); border-color: var(--col); }
+
+#alarm-list { min-height: 60px; }
+.alarm-entry {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid #0e0e0e;
+}
+.alarm-entry:last-child { border-bottom: none; }
+.alarm-toggle-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1px solid #333; cursor: pointer; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.alarm-toggle-dot.on { background: var(--col); border-color: var(--col); box-shadow: 0 0 6px var(--col); }
+.alarm-time-display {
+  font-size: 16px; font-family: 'Courier New', monospace; letter-spacing: 3px;
+  color: #555; flex: 0 0 80px; cursor: pointer; transition: color 0.15s;
+}
+.alarm-time-display.on { color: var(--col); }
+.alarm-time-display:hover { color: var(--col); }
+.alarm-label-input {
+  flex: 1; background: transparent; border: none; border-bottom: 1px solid #111;
+  color: #444; font-size: 10px; letter-spacing: 2px; outline: none;
+  font-family: inherit; padding: 2px 4px;
+}
+.alarm-label-input:focus { border-bottom-color: #333; color: #666; }
+.alarm-sound-select {
+  font-size: 9px; letter-spacing: 1px; color: #333; background: transparent;
+  border: 1px solid #1a1a1a; border-radius: 2px; padding: 2px 4px;
+  cursor: pointer; outline: none; font-family: inherit;
+}
+.alarm-sound-select:hover, .alarm-sound-select:focus { border-color: #333; color: #444; }
+.alarm-sound-select option { background: #0a0a0a; }
+.alarm-del-btn {
+  background: transparent; border: none; color: #222; cursor: pointer;
+  font-size: 14px; padding: 0 4px; transition: color 0.15s; line-height: 1;
+}
+.alarm-del-btn:hover { color: #FF4444; }
+
+/* Add alarm row */
+#add-alarm-row {
+  display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap;
+}
+#add-alarm-picker { display: flex; align-items: center; gap: 8px; }
+
+/* Alarm action bar */
+#alarm-action-bar {
+  display: flex; gap: 8px; margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid #0e0e0e; flex-wrap: wrap; align-items: center;
+}
+#alarm-set-name-input {
+  background: transparent; border: none; border-bottom: 1px solid #1a1a1a;
+  color: #444; font-size: 10px; letter-spacing: 2px; outline: none;
+  font-family: inherit; width: 100px;
+}
+#alarm-set-name-input:focus { border-bottom-color: #333; }
+
+/* Ringing overlay */
+#alarm-status-bar {
+  margin-top: 10px; font-size: 10px; letter-spacing: 2px; color: #2a2a2a;
+  min-height: 16px;
+}
+#alarm-status-bar.active { color: var(--col); }
+#alarm-status-bar.ringing { color: #FF4444; animation: blink 0.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* Overlay snooze/dismiss */
+#alarm-overlay-btns { display: flex; gap: 16px; flex-direction: column; align-items: center; }
+#alarm-snooze {
+  background: #111; border: 2px solid #886600; color: #FFAA00;
+  font-size: 12px; letter-spacing: 3px; padding: 10px 28px;
+  cursor: pointer; border-radius: 4px;
+}
+#alarm-snooze:hover { box-shadow: 0 0 20px #FFAA0066; }
+.snooze-opts { display: flex; gap: 8px; }
+.snooze-opt {
+  background: transparent; border: 1px solid #442200; color: #664400;
+  font-size: 10px; letter-spacing: 2px; padding: 5px 12px;
+  cursor: pointer; border-radius: 3px; transition: all 0.15s;
+}
+.snooze-opt:hover, .snooze-opt.active { border-color: #FFAA00; color: #FFAA00; }
+
+/* ── WORLD CLOCK ── */
+#tz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 32px; }
+.tz-card { display: flex; flex-direction: column; gap: 6px; }
+.tz-name { font-size: 10px; letter-spacing: 2px; color: #444; }
+
+/* ── ALARM OVERLAY ── */
+#alarm-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(255,0,0,0.06); z-index: 99;
+  justify-content: center; align-items: center;
+  animation: flashbg 0.5s infinite alternate;
+}
+#alarm-overlay.show { display: flex; }
+@keyframes flashbg { from{background:rgba(255,0,0,0.03)} to{background:rgba(255,0,0,0.14)} }
+#alarm-dismiss {
+  background: #111; border: 2px solid #FF4444; color: #FF4444;
+  font-size: 14px; letter-spacing: 3px; padding: 14px 32px;
+  cursor: pointer; border-radius: 4px;
+  animation: pulse 0.5s infinite alternate;
+}
+@keyframes pulse { from{box-shadow:0 0 10px #FF444433} to{box-shadow:0 0 30px #FF4444aa} }
+
+/* ── CONTROLS ── */
+#controls {
+  margin-top: 24px; display: flex; align-items: center;
+  justify-content: center; gap: 10px; flex-wrap: wrap;
+  opacity: 0; transform: translateY(6px); pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#clock-wrapper:hover #controls { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.ctrl-label { font-size: 11px; letter-spacing: 2px; color: #444; }
+.ctrl-sep { color: #333; }
+.ctrl-btn {
+  background: transparent; border: 1px solid #222; color: #444;
+  font-size: 11px; letter-spacing: 1px; padding: 4px 10px;
+  cursor: pointer; border-radius: 3px; transition: all 0.15s ease;
+}
+.ctrl-btn:hover, .ctrl-btn.active { border-color: var(--col); color: var(--col); }
+
+/* ── FULLSCREEN btn ── */
+#btn-fs {
+  position: absolute; top: 10px; right: 14px;
+  background: transparent; border: none; color: #1e1e1e;
+  font-size: 18px; cursor: pointer; transition: color 0.2s; line-height: 1;
+}
+#btn-fs:hover { color: var(--col); }
+</style>
+</head>
+<body>
+
+<div id="alarm-overlay">
+  <div id="alarm-overlay-btns">
+    <div style="color:#FF4444;font-size:13px;letter-spacing:4px;text-align:center;" id="overlay-alarm-name">⏰ ALARM</div>
+    <button id="alarm-dismiss">DISMISS</button>
+    <div class="snooze-opts">
+      <button class="snooze-opt" data-snooze="5">+5 MIN</button>
+      <button class="snooze-opt active" data-snooze="10">+10 MIN</button>
+      <button class="snooze-opt" data-snooze="15">+15 MIN</button>
+    </div>
+    <button id="alarm-snooze">SNOOZE</button>
+  </div>
+</div>
+
+<div id="clock-wrapper">
+  <button id="btn-fs" title="Fullscreen">⛶</button>
+
+  <div id="tabs">
+    <button class="tab-btn active" data-tab="clock">CLOCK</button>
+    <button class="tab-btn" data-tab="stopwatch">STOPWATCH</button>
+    <button class="tab-btn" data-tab="alarm">ALARM</button>
+    <button class="tab-btn" data-tab="world">WORLD</button>
+  </div>
+
+  <!-- ══ CLOCK ══ -->
+  <div id="panel-clock" class="panel active">
+    <div id="date-row">
+      <div class="digit-group"><canvas id="c-year"></canvas><span class="date-label">YEAR</span></div>
+      <div class="digit-group"><canvas id="c-month"></canvas><span class="date-label">MONTH</span></div>
+      <div class="digit-group"><canvas id="c-day"></canvas><span class="date-label">DAY</span></div>
+      <div class="digit-group" style="margin-left:14px"><canvas id="c-dow"></canvas><span class="date-label" style="opacity:0">.</span></div>
+    </div>
+    <div id="time-row">
+      <div id="ampm-stack">
+        <span class="ampm-lbl" id="lbl-am">AM</span>
+        <span class="ampm-lbl" id="lbl-pm">PM</span>
+      </div>
+      <div class="digit-group"><canvas id="c-hour"></canvas><span class="date-label">HOUR</span></div>
+      <div class="digit-group"><canvas id="c-colon"></canvas><span class="date-label" style="opacity:0">.</span></div>
+      <div class="digit-group"><canvas id="c-min"></canvas><span class="date-label">MINUTE</span></div>
+      <div class="digit-group" style="margin-left:14px"><canvas id="c-sec"></canvas><span class="date-label">SECOND</span></div>
+    </div>
+    <div id="battery-row">
+      <div id="battery-label">BATTERY</div>
+      <div id="battery-bars"></div>
+      <div class="pct-group"><canvas id="c-bat-pct"></canvas><span id="pct-sign">%</span></div>
+    </div>
+  </div>
+
+  <!-- ══ STOPWATCH ══ -->
+  <div id="panel-stopwatch" class="panel">
+    <div id="sw-row">
+      <div class="digit-group"><canvas id="c-sw-hm"></canvas><span class="date-label">HH : MM</span></div>
+      <div class="digit-group" style="margin-left:8px"><canvas id="c-sw-s"></canvas><span class="date-label">SEC</span></div>
+      <div class="digit-group" style="margin-left:4px"><canvas id="c-sw-ms"></canvas><span class="date-label">MS</span></div>
+    </div>
+    <div id="sw-btns">
+      <button class="ctrl-btn" id="btn-sw-start">START</button>
+      <button class="ctrl-btn" id="btn-sw-lap">LAP</button>
+      <button class="ctrl-btn" id="btn-sw-reset">RESET</button>
+    </div>
+    <div id="sw-laps"></div>
+  </div>
+
+  <!-- ══ ALARM ══ -->
+  <div id="panel-alarm" class="panel">
+    <div id="alarm-panel-inner">
+      <!-- Set tabs -->
+      <div id="alarm-sets-bar">
+        <!-- dynamically populated -->
+      </div>
+
+      <!-- Alarm list for current set -->
+      <div id="alarm-list"></div>
+
+      <!-- Add new alarm row -->
+      <div id="add-alarm-row">
+        <div id="add-alarm-picker">
+          <!-- drum picker injected here -->
+        </div>
+        <button class="ctrl-btn" id="btn-add-alarm">+ ADD</button>
+        <select class="alarm-sound-select" id="new-alarm-sound">
+          <option value="beep">BEEP</option>
+          <option value="pulse">PULSE</option>
+          <option value="chime">CHIME</option>
+          <option value="siren">SIREN</option>
+          <option value="melody">MELODY</option>
+        </select>
+        <button class="ctrl-btn" id="btn-preview-sound" title="Preview sound">▶</button>
+      </div>
+
+      <!-- Set management bar -->
+      <div id="alarm-action-bar">
+        <input id="alarm-set-name-input" type="text" placeholder="SET NAME" maxlength="20" spellcheck="false">
+        <button class="ctrl-btn" id="btn-rename-set">RENAME</button>
+        <button class="ctrl-btn" id="btn-del-set">DEL SET</button>
+        <span class="ctrl-sep">|</span>
+        <button class="ctrl-btn" id="btn-save-sets">SAVE ↓</button>
+        <button class="ctrl-btn" id="btn-load-sets">LOAD ↑</button>
+        <input type="file" id="file-load-sets" accept=".json" style="display:none">
+      </div>
+
+      <div id="alarm-status-bar">ALARM OFF</div>
+    </div>
+  </div>
+
+  <!-- ══ WORLD CLOCK ══ -->
+  <div id="panel-world" class="panel">
+    <div id="tz-grid">
+      <div class="tz-card"><span class="tz-name">NEW YORK</span><canvas id="c-tz-ny"></canvas></div>
+      <div class="tz-card"><span class="tz-name">LONDON</span><canvas id="c-tz-lon"></canvas></div>
+      <div class="tz-card"><span class="tz-name">TOKYO</span><canvas id="c-tz-tok"></canvas></div>
+      <div class="tz-card"><span class="tz-name">SYDNEY</span><canvas id="c-tz-syd"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ══ CONTROLS ══ -->
+  <div id="controls">
+    <span class="ctrl-label">COLOR</span>
+    <button class="ctrl-btn" data-color="blue">BLUE</button>
+    <button class="ctrl-btn active" data-color="red">RED</button>
+    <button class="ctrl-btn" data-color="green">GREEN</button>
+    <button class="ctrl-btn" data-color="amber">AMBER</button>
+    <button class="ctrl-btn" data-color="white">WHITE</button>
+    <span class="ctrl-sep">|</span>
+    <span class="ctrl-label">FORMAT</span>
+    <button class="ctrl-btn" data-fmt="12">12H</button>
+    <button class="ctrl-btn active" data-fmt="24">24H</button>
+    <span class="ctrl-sep">|</span>
+    <button class="ctrl-btn" id="btn-dim">DIM</button>
+  </div>
+</div>
+
+<script>
+/* ── PALETTES ── */
+const PALETTES = {
+  blue:  { col:'#4A86FF', dim:'#0A1A33' },
+  red:   { col:'#FF4444', dim:'#220909' },
+  green: { col:'#44FF88', dim:'#082214' },
+  amber: { col:'#FFAA00', dim:'#2A1800' },
+  white: { col:'#CCCCCC', dim:'#181818' },
+};
+const DAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+let currentColor  = 'red';
+let currentFormat = '24';
+
+/* ── BATTERY ── */
+const TOTAL_BARS = 10;
+const batteryBars = document.getElementById('battery-bars');
+let currentBatteryLevel = 0.57;
+for (let i=0; i<TOTAL_BARS; i++) {
+  const s = document.createElement('div'); s.className='battery-seg'; batteryBars.appendChild(s);
+}
+function updateBattery(level) {
+  currentBatteryLevel = level;
+  const active = Math.round(level*TOTAL_BARS);
+  [...batteryBars.children].forEach((s,i)=>s.classList.toggle('active',i<active));
+  redrawClock();
+}
+if (navigator.getBattery) {
+  navigator.getBattery().then(b=>{ updateBattery(b.level); b.addEventListener('levelchange',()=>updateBattery(b.level)); });
+} else { updateBattery(0.57); }
+
+/* ── DOT MATRIX FONT ── */
+const FONT_5x7 = {
+  S:["01111","10000","10000","01110","00001","00001","11110"],
+  U:["10001","10001","10001","10001","10001","10001","01110"],
+  N:["10001","11001","10101","10011","10001","10001","10001"],
+  M:["10001","11011","10101","10001","10001","10001","10001"],
+  O:["01110","10001","10001","10001","10001","10001","01110"],
+  T:["11111","00100","00100","00100","00100","00100","00100"],
+  E:["11111","10000","10000","11110","10000","10000","11111"],
+  W:["10001","10001","10001","10101","10101","10101","01010"],
+  D:["11110","10001","10001","10001","10001","10001","11110"],
+  H:["10001","10001","10001","11111","10001","10001","10001"],
+  F:["11111","10000","10000","11110","10000","10000","10000"],
+  R:["11110","10001","10001","11110","10100","10010","10001"],
+  I:["01110","00100","00100","00100","00100","00100","01110"],
+  A:["01110","10001","10001","11111","10001","10001","10001"],
+};
+function drawMatrix(canvas, str) {
+  const ds=5,gap=1,cw=5*ds+4*gap,ch=7*ds+6*gap,ls=8,pad=2;
+  canvas.width  = str.length*cw+(str.length-1)*ls+pad*2;
+  canvas.height = ch+pad*2;
+  const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+  const pal=PALETTES[currentColor];
+  for (let i=0;i<str.length;i++) {
+    const m=FONT_5x7[str[i]]||FONT_5x7['S'], sx=pad+i*(cw+ls);
+    for (let y=0;y<7;y++) for (let x=0;x<5;x++) {
+      ctx.fillStyle=m[y][x]==='1'?pal.col:pal.dim;
+      ctx.fillRect(sx+x*(ds+gap),pad+y*(ds+gap),ds,ds);
+    }
+  }
+}
+
+/* ── 7-SEGMENT ── */
+const SEG = {
+  '0':[1,1,1,1,1,1,0],'1':[0,1,1,0,0,0,0],'2':[1,1,0,1,1,0,1],
+  '3':[1,1,1,1,0,0,1],'4':[0,1,1,0,0,1,1],'5':[1,0,1,1,0,1,1],
+  '6':[1,0,1,1,1,1,1],'7':[1,1,1,0,0,0,0],'8':[1,1,1,1,1,1,1],
+  '9':[1,1,1,1,0,1,1],' ':[0,0,0,0,0,0,0],
+};
+function drawDigit(ctx,x,y,w,h,ch,colOn,colOff) {
+  const segs=SEG[ch]||SEG[' '];
+  const t=Math.max(2,Math.round(w*0.1)), g=Math.max(2,Math.round(w*0.13));
+  const TLx=x,TLy=y,TRx=x+w,TRy=y,MLx=x,MLy=y+h/2,MRx=x+w,MRy=y+h/2,BLx=x,BLy=y+h;
+  function H(tx,ty,len){return[[tx,ty],[tx+g,ty-t],[tx+len-g,ty-t],[tx+len,ty],[tx+len-g,ty+t],[tx+g,ty+t]];}
+  function V(tx,ty,len){return[[tx,ty],[tx+t,ty+g],[tx+t,ty+len-g],[tx,ty+len],[tx-t,ty+len-g],[tx-t,ty+g]];}
+  const segH=h/2;
+  [H(TLx,TLy,w),V(TRx,TRy,segH),V(MRx,MRy,segH),H(BLx,BLy,w),V(MLx,MLy,segH),V(TLx,TLy,segH),H(MLx,MLy,w)]
+  .forEach((pts,i)=>{
+    ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+    for(let j=1;j<pts.length;j++) ctx.lineTo(pts[j][0],pts[j][1]);
+    ctx.closePath(); ctx.fillStyle=segs[i]?colOn:colOff; ctx.fill();
+  });
+}
+function drawString(canvas,str,dw,dh,sp) {
+  const PAD=4;
+  canvas.width=str.length*(dw+sp)-sp+PAD*2; canvas.height=dh+PAD*2;
+  const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+  const pal=PALETTES[currentColor];
+  str.split('').forEach((ch,i)=>drawDigit(ctx,PAD+i*(dw+sp),PAD,dw,dh,ch,pal.col,pal.dim));
+}
+function drawColon(canvas,on) {
+  canvas.width=24; canvas.height=LARGE.dh+8;
+  const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=on?PALETTES[currentColor].col:PALETTES[currentColor].dim;
+  const size=12,x=(canvas.width-size)/2;
+  ctx.fillRect(x,22,size,size); ctx.fillRect(x,52,size,size);
+}
+
+const TINY ={dw:18,dh:28,sp:6}; const SMALL={dw:26,dh:40,sp:8};
+const MED  ={dw:32,dh:50,sp:8}; const LARGE={dw:54,dh:84,sp:14};
+const WC   ={dw:30,dh:46,sp:8};
+
+/* ── CLOCK ── */
+function redrawClock(now) {
+  const n=now||new Date();
+  drawString(document.getElementById('c-year'),  String(n.getFullYear()),                SMALL.dw,SMALL.dh,SMALL.sp);
+  drawString(document.getElementById('c-month'), String(n.getMonth()+1).padStart(2,'0'), SMALL.dw,SMALL.dh,SMALL.sp);
+  drawString(document.getElementById('c-day'),   String(n.getDate()).padStart(2,'0'),    SMALL.dw,SMALL.dh,SMALL.sp);
+  drawMatrix(document.getElementById('c-dow'),   DAYS[n.getDay()]);
+  let hr=n.getHours(); const mn=n.getMinutes(),sc=n.getSeconds();
+  if (currentFormat==='12') {
+    const isPM=hr>=12; hr=hr%12||12;
+    document.getElementById('lbl-am').className='ampm-lbl'+(!isPM?' active':'');
+    document.getElementById('lbl-pm').className='ampm-lbl'+(isPM?' active':'');
+    document.getElementById('ampm-stack').style.display='flex';
+  } else { document.getElementById('ampm-stack').style.display='none'; }
+  drawString(document.getElementById('c-hour'), String(hr).padStart(2,'0'), LARGE.dw,LARGE.dh,LARGE.sp);
+  drawString(document.getElementById('c-min'),  String(mn).padStart(2,'0'), LARGE.dw,LARGE.dh,LARGE.sp);
+  drawString(document.getElementById('c-sec'),  String(sc).padStart(2,'0'), MED.dw,MED.dh,MED.sp);
+  drawColon(document.getElementById('c-colon'), sc%2===0);
+  drawString(document.getElementById('c-bat-pct'), String(Math.round(currentBatteryLevel*100)).padStart(3,' '), TINY.dw,TINY.dh,TINY.sp);
+}
+
+/* ── WORLD CLOCK ── */
+const ZONES=[
+  {id:'c-tz-ny', tz:'America/New_York'},{id:'c-tz-lon',tz:'Europe/London'},
+  {id:'c-tz-tok',tz:'Asia/Tokyo'},      {id:'c-tz-syd',tz:'Australia/Sydney'},
+];
+function redrawWorld(now) {
+  const n=now||new Date();
+  ZONES.forEach(({id,tz})=>{
+    const fmt=new Intl.DateTimeFormat('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:tz});
+    const parts=fmt.formatToParts(n);
+    const hh=parts.find(p=>p.type==='hour')?.value||'00';
+    const mm=parts.find(p=>p.type==='minute')?.value||'00';
+    drawString(document.getElementById(id), hh+mm, WC.dw,WC.dh,WC.sp);
+  });
+}
+
+/* ── STOPWATCH ── */
+let swRunning=false, swStart=0, swElapsed=0, swRaf=null, swLaps=[];
+function swFmt(ms) {
+  const h=Math.floor(ms/3600000); ms%=3600000;
+  const m=Math.floor(ms/60000);   ms%=60000;
+  const s=Math.floor(ms/1000);    ms%=1000;
+  return {h,m,s,cs:Math.floor(ms/10)};
+}
+function redrawSW() {
+  const e=swRunning?(Date.now()-swStart+swElapsed):swElapsed;
+  const f=swFmt(e);
+  drawString(document.getElementById('c-sw-hm'), String(f.h).padStart(2,'0')+String(f.m).padStart(2,'0'), MED.dw,MED.dh,MED.sp);
+  drawString(document.getElementById('c-sw-s'),  String(f.s).padStart(2,'0'),  MED.dw,MED.dh,MED.sp);
+  drawString(document.getElementById('c-sw-ms'), String(f.cs).padStart(2,'0'), SMALL.dw,SMALL.dh,SMALL.sp);
+}
+function swTick() { redrawSW(); if(swRunning) swRaf=requestAnimationFrame(swTick); }
+
+document.getElementById('btn-sw-start').addEventListener('click',()=>{
+  if (!swRunning) {
+    swRunning=true; swStart=Date.now(); swRaf=requestAnimationFrame(swTick);
+    document.getElementById('btn-sw-start').textContent='STOP';
+  } else {
+    swElapsed+=Date.now()-swStart; swRunning=false; cancelAnimationFrame(swRaf);
+    document.getElementById('btn-sw-start').textContent='START'; redrawSW();
+  }
+});
+document.getElementById('btn-sw-lap').addEventListener('click',()=>{
+  if (!swRunning&&swElapsed===0) return;
+  swLaps.push(swRunning?(Date.now()-swStart+swElapsed):swElapsed);
+  renderLaps();
+});
+document.getElementById('btn-sw-reset').addEventListener('click',()=>{
+  swRunning=false; cancelAnimationFrame(swRaf);
+  swElapsed=0; swStart=0; swLaps=[];
+  document.getElementById('btn-sw-start').textContent='START';
+  redrawSW(); renderLaps();
+});
+function renderLaps() {
+  const c=document.getElementById('sw-laps');
+  if (!swLaps.length){c.innerHTML='';return;}
+  const splits=swLaps.map((v,i)=>i===0?v:v-swLaps[i-1]);
+  const fastest=Math.min(...splits), slowest=Math.max(...splits);
+  const fmt=f=>`${String(f.m).padStart(2,'0')}:${String(f.s).padStart(2,'0')}.${String(f.cs).padStart(2,'0')}`;
+  c.innerHTML=[...swLaps].reverse().map((total,ri)=>{
+    const i=swLaps.length-1-ri, split=splits[i];
+    const cls=swLaps.length>1?(split===fastest?'fastest':split===slowest?'slowest':''):'';
+    return `<div class="lap-entry ${cls}">
+      <span>LAP ${String(i+1).padStart(2,'0')}</span>
+      <span class="lap-time">${fmt(swFmt(split))}</span>
+      <span style="color:#333">${fmt(swFmt(total))}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   ALARM SYSTEM
+   ══════════════════════════════════════════════════ */
+
+/* ── Sound Engine ── */
+function getAC() {
+  if (!getAC._ac) getAC._ac = new (window.AudioContext||window.webkitAudioContext)();
+  return getAC._ac;
+}
+
+const SOUNDS = {
+  beep(ac, t=0) {
+    for (let i=0;i<8;i++) {
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value=880; o.type='square';
+      const ts=t+i*0.35;
+      g.gain.setValueAtTime(0,ts); g.gain.linearRampToValueAtTime(0.3,ts+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,ts+0.28);
+      o.start(ts); o.stop(ts+0.3);
+    }
+  },
+  pulse(ac, t=0) {
+    for (let i=0;i<12;i++) {
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value=440+Math.sin(i*0.7)*200; o.type='sine';
+      const ts=t+i*0.18;
+      g.gain.setValueAtTime(0,ts); g.gain.linearRampToValueAtTime(0.4,ts+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,ts+0.15);
+      o.start(ts); o.stop(ts+0.16);
+    }
+  },
+  chime(ac, t=0) {
+    const notes=[523,659,784,1047,784,659,523];
+    notes.forEach((freq,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value=freq; o.type='triangle';
+      const ts=t+i*0.22;
+      g.gain.setValueAtTime(0,ts); g.gain.linearRampToValueAtTime(0.35,ts+0.05);
+      g.gain.exponentialRampToValueAtTime(0.001,ts+0.6);
+      o.start(ts); o.stop(ts+0.65);
+    });
+  },
+  siren(ac, t=0) {
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type='sawtooth'; o.frequency.value=400;
+    o.frequency.linearRampToValueAtTime(900, t+0.5);
+    o.frequency.linearRampToValueAtTime(400, t+1.0);
+    o.frequency.linearRampToValueAtTime(900, t+1.5);
+    o.frequency.linearRampToValueAtTime(400, t+2.0);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.3,t+0.05);
+    g.gain.setValueAtTime(0.3,t+1.9); g.gain.linearRampToValueAtTime(0,t+2.1);
+    o.start(t); o.stop(t+2.1);
+  },
+  melody(ac, t=0) {
+    const seq=[392,0,440,0,494,0,523,494,440,392];
+    seq.forEach((freq,i)=>{
+      if(!freq) return;
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value=freq; o.type='sine';
+      const ts=t+i*0.16;
+      g.gain.setValueAtTime(0,ts); g.gain.linearRampToValueAtTime(0.35,ts+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,ts+0.3);
+      o.start(ts); o.stop(ts+0.32);
+    });
+  }
+};
+
+let _ringInterval = null;
+function ringSound(soundName) {
+  stopRingSound();
+  const fn = SOUNDS[soundName] || SOUNDS.beep;
+  const doRing = () => { try { fn(getAC(), getAC().currentTime+0.05); } catch(e){} };
+  doRing();
+  _ringInterval = setInterval(doRing, 2800);
+}
+function stopRingSound() { if(_ringInterval){ clearInterval(_ringInterval); _ringInterval=null; } }
+function previewSound(soundName) {
+  try { (SOUNDS[soundName]||SOUNDS.beep)(getAC(), getAC().currentTime+0.05); } catch(e){}
+}
+
+/* ── Data Model ── */
+// alarmSets: [{id, name, alarms:[{id,h,m,label,sound,enabled,snoozedUntil}]}]
+let alarmSets = [{ id: uid(), name: 'DEFAULT', alarms: [] }];
+let activeSetIdx = 0;
+let snoozeMins = 10;
+let firingAlarm = null; // {alarm, set}
+
+function uid() { return Math.random().toString(36).slice(2,9); }
+
+function activeSet() { return alarmSets[activeSetIdx]; }
+
+/* ── Drum Picker ── */
+const drumState = { h: 7, m: 0 };
+function buildDrumPicker(container) {
+  container.innerHTML = '';
+  const picker = document.createElement('div');
+  picker.className = 'drum-picker';
+
+  function makeCol(type, count, padded) {
+    const col = document.createElement('div'); col.className='drum-col';
+    const hi = document.createElement('div'); hi.className='drum-highlight';
+    col.appendChild(hi);
+    const inner = document.createElement('div'); inner.className='drum-inner';
+    for(let i=0;i<count;i++) {
+      const d=document.createElement('div'); d.className='drum-item';
+      d.dataset.val=i; d.textContent=padded?String(i).padStart(2,'0'):String(i);
+      inner.appendChild(d);
+    }
+    col.appendChild(inner);
+    col.dataset.type=type;
+    attachDrumEvents(col, inner, type, count);
+    setDrumValue(col, inner, type==='h'?drumState.h:drumState.m, count);
+    return col;
+  }
+
+  const hCol = makeCol('h', 24, false);
+  const sep = document.createElement('div'); sep.className='drum-sep'; sep.textContent=':';
+  const mCol = makeCol('m', 60, true);
+  picker.appendChild(hCol); picker.appendChild(sep); picker.appendChild(mCol);
+  container.appendChild(picker);
+}
+
+function setDrumValue(col, inner, val, count) {
+  inner.style.transition='none';
+  inner.style.transform=`translateY(${-(val*30)}px)`;
+  col.querySelectorAll('.drum-item[data-val]').forEach(d=>{
+    d.classList.toggle('selected', parseInt(d.dataset.val)===val);
+  });
+}
+
+function attachDrumEvents(col, inner, type, count) {
+  let startY=0, startVal=0, dragging=false;
+  const getVal=()=>type==='h'?drumState.h:drumState.m;
+  const setVal=(v)=>{ const clamped=Math.max(0,Math.min(count-1,v)); type==='h'?(drumState.h=clamped):(drumState.m=clamped); return clamped; };
+
+  col.addEventListener('mousedown', e=>{ dragging=true; startY=e.clientY; startVal=getVal(); e.preventDefault(); });
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    const dy=startY-e.clientY;
+    const delta=Math.round(dy/30);
+    const nv=setVal(startVal+delta);
+    inner.style.transition='none';
+    inner.style.transform=`translateY(${-nv*30}px)`;
+    col.querySelectorAll('.drum-item[data-val]').forEach(d=>d.classList.toggle('selected',parseInt(d.dataset.val)===nv));
+  });
+  window.addEventListener('mouseup', ()=>{ dragging=false; });
+  col.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const delta=e.deltaY>0?1:-1;
+    const nv=setVal(getVal()+delta);
+    inner.style.transition='transform 0.12s ease';
+    inner.style.transform=`translateY(${-nv*30}px)`;
+    col.querySelectorAll('.drum-item[data-val]').forEach(d=>d.classList.toggle('selected',parseInt(d.dataset.val)===nv));
+  }, {passive:false});
+  // Touch
+  let touchStartY=0, touchStartVal=0;
+  col.addEventListener('touchstart', e=>{ touchStartY=e.touches[0].clientY; touchStartVal=getVal(); }, {passive:true});
+  col.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    const dy=touchStartY-e.touches[0].clientY;
+    const delta=Math.round(dy/30);
+    const nv=setVal(touchStartVal+delta);
+    inner.style.transition='none';
+    inner.style.transform=`translateY(${-nv*30}px)`;
+    col.querySelectorAll('.drum-item[data-val]').forEach(d=>d.classList.toggle('selected',parseInt(d.dataset.val)===nv));
+  }, {passive:false});
+}
+
+/* ── Render alarm list ── */
+function renderAlarms() {
+  const set = activeSet();
+  const list = document.getElementById('alarm-list');
+  if(!set.alarms.length) { list.innerHTML='<div style="color:#1e1e1e;font-size:10px;letter-spacing:2px;padding:12px 0;">NO ALARMS</div>'; updateStatusBar(); saveAlarms(); return; }
+  list.innerHTML = set.alarms.map((a,i)=>{
+    const hh=String(a.h).padStart(2,'0'), mm=String(a.m).padStart(2,'0');
+    const snoozed = a.snoozedUntil ? ` <span style="color:#664400;font-size:9px">ZZZ</span>` : '';
+    return `<div class="alarm-entry" data-idx="${i}">
+      <div class="alarm-toggle-dot ${a.enabled?'on':''}" data-action="toggle" data-idx="${i}"></div>
+      <div class="alarm-time-display ${a.enabled?'on':''}" data-action="edit-time" data-idx="${i}">${hh}:${mm}</div>
+      ${snoozed}
+      <input class="alarm-label-input" data-action="label" data-idx="${i}" value="${a.label||''}" placeholder="LABEL" maxlength="20" spellcheck="false">
+      <select class="alarm-sound-select" data-action="sound" data-idx="${i}">
+        ${['beep','pulse','chime','siren','melody'].map(s=>`<option value="${s}" ${a.sound===s?'selected':''}>${s.toUpperCase()}</option>`).join('')}
+      </select>
+      <button class="ctrl-btn" style="font-size:9px;padding:3px 7px" data-action="preview" data-idx="${i}">▶</button>
+      <button class="alarm-del-btn" data-action="delete" data-idx="${i}">✕</button>
+    </div>`;
+  }).join('');
+  updateStatusBar();
+  saveAlarms();
+}
+
+function renderSetTabs() {
+  const bar = document.getElementById('alarm-sets-bar');
+  bar.innerHTML = alarmSets.map((s,i)=>
+    `<button class="set-tab ${i===activeSetIdx?'active':''}" data-setidx="${i}">${s.name}</button>`
+  ).join('') + `<button class="set-tab add-set" id="btn-add-set">+ SET</button>`;
+  bar.querySelectorAll('[data-setidx]').forEach(btn=>{
+    btn.addEventListener('click',()=>{ activeSetIdx=parseInt(btn.dataset.setidx); renderSetTabs(); renderAlarms(); syncSetNameInput(); saveAlarms(); });
+  });
+  document.getElementById('btn-add-set').addEventListener('click',()=>{
+    alarmSets.push({id:uid(),name:`SET ${alarmSets.length+1}`,alarms:[]});
+    activeSetIdx=alarmSets.length-1;
+    renderSetTabs(); renderAlarms(); syncSetNameInput();
+  });
+  syncSetNameInput();
+}
+
+function syncSetNameInput() {
+  document.getElementById('alarm-set-name-input').value = activeSet().name;
+}
+
+function updateStatusBar() {
+  const bar = document.getElementById('alarm-status-bar');
+  const allEnabled = alarmSets.flatMap(s=>s.alarms).filter(a=>a.enabled);
+  if(!allEnabled.length) { bar.textContent='ALL ALARMS OFF'; bar.className=''; return; }
+  const next = allEnabled.slice().sort((a,b)=>{
+    const now=new Date(), ah=now.getHours(), am=now.getMinutes();
+    const minA=(a.h*60+a.m-ah*60-am+1440)%1440;
+    const minB=(b.h*60+b.m-ah*60-am+1440)%1440;
+    return minA-minB;
+  })[0];
+  bar.textContent=`NEXT: ${String(next.h).padStart(2,'0')}:${String(next.m).padStart(2,'0')} ${next.label||''}`;
+  bar.className='active';
+}
+
+/* ── Alarm list event delegation ── */
+document.getElementById('alarm-list').addEventListener('click', e=>{
+  const el=e.target.closest('[data-action]'); if(!el) return;
+  const idx=parseInt(el.dataset.idx);
+  const alarm=activeSet().alarms[idx];
+  const action=el.dataset.action;
+  if(action==='toggle') { alarm.enabled=!alarm.enabled; alarm.snoozedUntil=null; renderAlarms(); }
+  else if(action==='delete') { activeSet().alarms.splice(idx,1); renderAlarms(); }
+  else if(action==='preview') { previewSound(alarm.sound); }
+  else if(action==='edit-time') {
+    // Click on time to edit: set drum to this alarm's time, focus
+    drumState.h=alarm.h; drumState.m=alarm.m;
+    buildDrumPicker(document.getElementById('add-alarm-picker'));
+    // scroll into view
+    document.getElementById('add-alarm-row').scrollIntoView({behavior:'smooth',block:'nearest'});
+    // then clicking Add replaces this alarm's time
+    document.getElementById('btn-add-alarm').dataset.editIdx=idx;
+    document.getElementById('btn-add-alarm').textContent='UPDATE';
+  }
+});
+document.getElementById('alarm-list').addEventListener('change', e=>{
+  const el=e.target.closest('[data-action]'); if(!el) return;
+  const idx=parseInt(el.dataset.idx);
+  const alarm=activeSet().alarms[idx];
+  if(el.dataset.action==='sound') { alarm.sound=el.value; saveAlarms(); }
+  else if(el.dataset.action==='label') { alarm.label=el.value; updateStatusBar(); saveAlarms(); }
+});
+
+/* ── Add / Update alarm ── */
+document.getElementById('btn-add-alarm').addEventListener('click',()=>{
+  const btn=document.getElementById('btn-add-alarm');
+  const editIdx=btn.dataset.editIdx;
+  const sound=document.getElementById('new-alarm-sound').value;
+  const isDupe = activeSet().alarms.some((a,i)=>
+    a.h===drumState.h && a.m===drumState.m && (editIdx===undefined || i!==parseInt(editIdx))
+  );
+  if(isDupe) {
+    const bar=document.getElementById('alarm-status-bar');
+    const prev=bar.textContent, prevClass=bar.className;
+    bar.textContent='DUPLICATE ALARM'; bar.className='ringing';
+    setTimeout(()=>{ bar.textContent=prev; bar.className=prevClass; }, 1800);
+    return;
+  }
+  if(editIdx!==undefined) {
+    const a=activeSet().alarms[parseInt(editIdx)];
+    a.h=drumState.h; a.m=drumState.m;
+    delete btn.dataset.editIdx; btn.textContent='+ ADD';
+  } else {
+    activeSet().alarms.push({id:uid(),h:drumState.h,m:drumState.m,label:'',sound,enabled:true,snoozedUntil:null});
+  }
+  drumState.h=7; drumState.m=0;
+  buildDrumPicker(document.getElementById('add-alarm-picker'));
+  renderAlarms();
+});
+document.getElementById('btn-preview-sound').addEventListener('click',()=>{
+  previewSound(document.getElementById('new-alarm-sound').value);
+});
+
+/* ── Set management ── */
+document.getElementById('btn-rename-set').addEventListener('click',()=>{
+  const v=document.getElementById('alarm-set-name-input').value.trim().toUpperCase();
+  if(v) { activeSet().name=v; renderSetTabs(); saveAlarms(); }
+});
+document.getElementById('btn-del-set').addEventListener('click',()=>{
+  if(alarmSets.length===1) { activeSet().alarms=[]; renderAlarms(); return; }
+  alarmSets.splice(activeSetIdx,1);
+  activeSetIdx=Math.max(0,activeSetIdx-1);
+  renderSetTabs(); renderAlarms();
+});
+
+/* ── Save / Load ── */
+document.getElementById('btn-save-sets').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify({version:1,sets:alarmSets},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='alarm-sets.json'; a.click();
+});
+document.getElementById('btn-load-sets').addEventListener('click',()=>{
+  document.getElementById('file-load-sets').click();
+});
+document.getElementById('file-load-sets').addEventListener('change', e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try {
+      const data=JSON.parse(ev.target.result);
+      if(data.sets && Array.isArray(data.sets)) {
+        alarmSets=data.sets; activeSetIdx=0;
+        renderSetTabs(); renderAlarms();
+      }
+    } catch(err) { alert('Invalid alarm file'); }
+    e.target.value='';
+  };
+  r.readAsText(file);
+});
+
+/* ── Snooze selector ── */
+document.querySelectorAll('.snooze-opt').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.snooze-opt').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); snoozeMins=parseInt(btn.dataset.snooze);
+  });
+});
+
+/* ── Dismiss / Snooze overlay ── */
+document.getElementById('alarm-dismiss').addEventListener('click',()=>{
+  document.getElementById('alarm-overlay').classList.remove('show');
+  stopRingSound();
+  if(firingAlarm){ firingAlarm.enabled=false; firingAlarm.snoozedUntil=null; firingAlarm=null; }
+  renderAlarms();
+});
+document.getElementById('alarm-snooze').addEventListener('click',()=>{
+  document.getElementById('alarm-overlay').classList.remove('show');
+  stopRingSound();
+  if(firingAlarm){
+    firingAlarm.snoozedUntil=Date.now()+snoozeMins*60000;
+    firingAlarm=null;
+  }
+  renderAlarms();
+});
+
+/* ── Check alarms ── */
+function checkAlarms(now) {
+  if(firingAlarm) return; // already ringing
+  const h=now.getHours(), m=now.getMinutes(), s=now.getSeconds();
+  if(s>=2) return; // only trigger in first 2 seconds of the minute
+  for(const set of alarmSets) {
+    for(const alarm of set.alarms) {
+      if(!alarm.enabled) continue;
+      if(alarm.snoozedUntil && Date.now()<alarm.snoozedUntil) continue;
+      if(alarm.snoozedUntil && Date.now()>=alarm.snoozedUntil) {
+        // snooze expired, check if it's the right time
+        const snoozeH=Math.floor(alarm.snoozedUntil/60000)%1440;
+        // just fire if snooze elapsed in the last 2s
+        if(Date.now()-alarm.snoozedUntil<2000) {
+          fireAlarm(alarm, set);
+          alarm.snoozedUntil=null;
+          return;
+        } else if(alarm.h===h && alarm.m===m) {
+          // original time triggered again after snooze expired at a different time — skip
+        }
+        continue;
+      }
+      if(alarm.h===h && alarm.m===m) {
+        fireAlarm(alarm, set);
+        return;
+      }
+    }
+  }
+}
+
+// Also check snooze expiry every second
+function checkSnoozeExpiry(now) {
+  if(firingAlarm) return;
+  for(const set of alarmSets) {
+    for(const alarm of set.alarms) {
+      if(!alarm.enabled || !alarm.snoozedUntil) continue;
+      if(Date.now()>=alarm.snoozedUntil) {
+        alarm.snoozedUntil=null;
+        fireAlarm(alarm, set);
+        return;
+      }
+    }
+  }
+}
+
+function fireAlarm(alarm, set) {
+  firingAlarm=alarm;
+  document.getElementById('overlay-alarm-name').textContent=`⏰  ${alarm.label||set.name||'ALARM'}`;
+  document.getElementById('alarm-overlay').classList.add('show');
+  ringSound(alarm.sound);
+  updateStatusBar();
+}
+
+/* ── TABS ── */
+let activeTab='clock';
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    activeTab=btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('panel-'+activeTab).classList.add('active');
+    if(activeTab==='world') redrawWorld();
+    if(activeTab==='stopwatch') redrawSW();
+  });
+});
+
+/* ── DIM (auto after 30s idle, or manual toggle) ── */
+//let dimTimer=null;
+let manualDim=false;
+function resetDim() {
+  if(manualDim) return;
+//  clearTimeout(dimTimer);
+  document.getElementById('clock-wrapper').classList.remove('dimmed');
+//  dimTimer=setTimeout(()=>{if(!manualDim)document.getElementById('clock-wrapper').classList.add('dimmed');},30000);
+}
+document.addEventListener('mousemove',resetDim);
+resetDim();
+document.getElementById('btn-dim').addEventListener('click',()=>{
+  manualDim=!manualDim;
+  document.getElementById('clock-wrapper').classList.toggle('dimmed',manualDim);
+  document.getElementById('btn-dim').classList.toggle('active',manualDim);
+  if(!manualDim) resetDim();
+});
+
+/* ── FULLSCREEN ── */
+document.getElementById('btn-fs').addEventListener('click',()=>{
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+  else document.exitFullscreen().catch(()=>{});
+});
+
+/* ── COLOR & FORMAT ── */
+function applyColor(name) {
+  currentColor=name;
+  const pal=PALETTES[name];
+  const root=document.getElementById('clock-wrapper');
+  root.style.setProperty('--col',pal.col);
+  root.style.setProperty('--dim',pal.dim);
+  redrawAll();
+}
+document.querySelectorAll('[data-color]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-color]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); applyColor(btn.dataset.color);
+    savePrefs();
+  });
+});
+document.querySelectorAll('[data-fmt]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-fmt]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); currentFormat=btn.dataset.fmt; redrawClock();
+    savePrefs();
+  });
+});
+
+/* ── PERSISTENCE ── */
+function savePrefs() {
+  try {
+    localStorage.setItem('lcd_prefs', JSON.stringify({ color: currentColor, format: currentFormat }));
+  } catch(e) {}
+}
+function saveAlarms() {
+  try {
+    localStorage.setItem('lcd_alarms', JSON.stringify({ version:1, sets:alarmSets, activeSetIdx }));
+  } catch(e) {}
+}
+function loadAll() {
+  // Prefs
+  try {
+    const p = JSON.parse(localStorage.getItem('lcd_prefs')||'{}');
+    if (p.color && PALETTES[p.color]) {
+      currentColor = p.color;
+      document.querySelectorAll('[data-color]').forEach(b=>b.classList.toggle('active', b.dataset.color===p.color));
+    }
+    if (p.format === '12' || p.format === '24') {
+      currentFormat = p.format;
+      document.querySelectorAll('[data-fmt]').forEach(b=>b.classList.toggle('active', b.dataset.fmt===p.format));
+    }
+  } catch(e) {}
+  // Alarms
+  try {
+    const a = JSON.parse(localStorage.getItem('lcd_alarms')||'{}');
+    if (a.sets && Array.isArray(a.sets) && a.sets.length) {
+      alarmSets = a.sets;
+      activeSetIdx = a.activeSetIdx||0;
+    }
+  } catch(e) {}
+}
+
+// persistence init done above
+
+/* ── MAIN TICK ── */
+function redrawAll(now) {
+  const n=now||new Date();
+  redrawClock(n);
+  if(activeTab==='world') redrawWorld(n);
+  checkAlarms(n);
+  checkSnoozeExpiry(n);
+}
+function tick() {
+  redrawAll(new Date());
+  setTimeout(tick, 1000-(Date.now()%1000));
+}
+loadAll();
+applyColor(currentColor);
+buildDrumPicker(document.getElementById('add-alarm-picker'));
+renderSetTabs();
+renderAlarms();
+redrawSW();
+tick();
+
+/* ── AUTOSIZE ── */
+function autosize() {
+  const wrapper = document.getElementById('clock-wrapper');
+  wrapper.style.transform = 'none';
+  const naturalW = wrapper.offsetWidth;
+  const naturalH = wrapper.offsetHeight;
+  const scaleX = (window.innerWidth  * 0.92) / naturalW;
+  const scaleY = (window.innerHeight * 0.92) / naturalH;
+  const scale  = Math.min(scaleX, scaleY, 1.5); // cap upscale at 150%
+  wrapper.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', autosize);
+autosize();
+
+/* ── SERVICE WORKER ── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ define('COOKIE_EXPIRATION_DAYS', 30);
 //   'IGNORE_CLICKS' (Experimental): Verifies the user only after they have clicked the button a certain number of times.
 define('CAPTCHA_MODE', 'IGNORE_CLICKS');
 // If using 'IGNORE_CLICKS' mode, this is the number of clicks to ignore. The user must click N+1 times.
-define('CLICKS_TO_IGNORE', 2);
+define('CLICKS_TO_IGNORE', 1);
 
 // -- Start session for CSRF, challenge tracking, and thresholds --
 session_start();
