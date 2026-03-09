@@ -87,6 +87,23 @@ body {
 .lap-entry.fastest .lap-time { color: #44FF88 !important; }
 .lap-entry.slowest .lap-time { color: #FF4444 !important; }
 
+/* ── COUNTDOWN ── */
+#cd-row { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 20px; }
+#cd-btns { display: flex; gap: 10px; margin-bottom: 12px; }
+#cd-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.cd-preset {
+  background: transparent; border: 1px solid #1a1a1a; color: #333;
+  font-size: 9px; letter-spacing: 2px; padding: 3px 9px;
+  cursor: pointer; border-radius: 3px; transition: all 0.15s;
+}
+.cd-preset:hover { border-color: var(--col); color: var(--col); }
+#cd-set-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+#cd-status {
+  font-size: 10px; letter-spacing: 2px; color: #2a2a2a; min-height: 16px; margin-top: 4px;
+}
+#cd-status.running { color: var(--col); }
+#cd-status.finished { color: #FF4444; animation: blink 0.4s infinite; }
+
 /* ── ALARM PANEL ── */
 #alarm-panel-inner { width: 520px; }
 
@@ -285,6 +302,7 @@ body {
   <div id="tabs">
     <button class="tab-btn active" data-tab="clock">CLOCK</button>
     <button class="tab-btn" data-tab="stopwatch">STOPWATCH</button>
+    <button class="tab-btn" data-tab="countdown">COUNTDOWN</button>
     <button class="tab-btn" data-tab="alarm">ALARM</button>
     <button class="tab-btn" data-tab="world">WORLD</button>
   </div>
@@ -327,6 +345,31 @@ body {
       <button class="ctrl-btn" id="btn-sw-reset">RESET</button>
     </div>
     <div id="sw-laps"></div>
+  </div>
+
+  <!-- ══ COUNTDOWN ══ -->
+  <div id="panel-countdown" class="panel">
+    <div id="cd-presets">
+      <button class="cd-preset" data-cd="60">1 MIN</button>
+      <button class="cd-preset" data-cd="300">5 MIN</button>
+      <button class="cd-preset" data-cd="600">10 MIN</button>
+      <button class="cd-preset" data-cd="900">15 MIN</button>
+      <button class="cd-preset" data-cd="1800">30 MIN</button>
+      <button class="cd-preset" data-cd="3600">1 HR</button>
+    </div>
+    <div id="cd-set-row">
+      <span class="date-label" style="color:#333">SET</span>
+      <div class="drum-picker" id="cd-picker"></div>
+    </div>
+    <div id="cd-row">
+      <div class="digit-group"><canvas id="c-cd-hm"></canvas><span class="date-label">HH : MM</span></div>
+      <div class="digit-group" style="margin-left:8px"><canvas id="c-cd-s"></canvas><span class="date-label">SEC</span></div>
+    </div>
+    <div id="cd-btns">
+      <button class="ctrl-btn" id="btn-cd-start">START</button>
+      <button class="ctrl-btn" id="btn-cd-reset">RESET</button>
+    </div>
+    <div id="cd-status">READY</div>
   </div>
 
   <!-- ══ ALARM ══ -->
@@ -590,6 +633,154 @@ function renderLaps() {
     </div>`;
   }).join('');
 }
+
+/* ══════════════════════════════════════════════════
+   COUNTDOWN TIMER
+   ══════════════════════════════════════════════════ */
+
+let cdRunning=false, cdRemaining=0, cdTotal=0, cdStart=0, cdRaf=null;
+
+function redrawCD() {
+  const r = cdRunning ? Math.max(0, cdTotal - (Date.now() - cdStart)) : cdRemaining;
+  const h=Math.floor(r/3600000); const rest=r%3600000;
+  const m=Math.floor(rest/60000);
+  const s=Math.floor((rest%60000)/1000);
+  drawString(document.getElementById('c-cd-hm'), String(h).padStart(2,'0')+String(m).padStart(2,'0'), MED.dw,MED.dh,MED.sp);
+  drawString(document.getElementById('c-cd-s'),  String(s).padStart(2,'0'), MED.dw,MED.dh,MED.sp);
+}
+
+function cdTick() {
+  const remaining = Math.max(0, cdTotal - (Date.now() - cdStart));
+  redrawCD();
+  if (remaining <= 0) {
+    cdRunning = false; cdRemaining = 0;
+    cancelAnimationFrame(cdRaf);
+    document.getElementById('btn-cd-start').textContent = 'START';
+    const status = document.getElementById('cd-status');
+    status.textContent = '▶  TIME\'S UP'; status.className = 'finished';
+    ringSound('beep');
+    setTimeout(()=>stopRingSound(), 4000);
+    return;
+  }
+  if (cdRunning) cdRaf = requestAnimationFrame(cdTick);
+}
+
+function cdSetFromDrum() {
+  const cols = document.querySelectorAll('#cd-picker .drum-col');
+  if (!cols.length) return;
+  const vals = [...cols].map(col => {
+    const sel = col.querySelector('.drum-item.selected');
+    return sel ? parseInt(sel.textContent) : 0;
+  });
+  // cols: HH, MM, SS
+  const secs = vals[0]*3600 + vals[1]*60 + vals[2];
+  cdRemaining = secs * 1000;
+  cdTotal = cdRemaining;
+  redrawCD();
+  const status = document.getElementById('cd-status');
+  status.textContent = 'READY'; status.className = '';
+}
+
+// Build drum picker for countdown (HH / MM / SS)
+function buildCDPicker() {
+  const container = document.getElementById('cd-picker');
+  container.innerHTML = '';
+  const cols = [
+    { max:23, label:'H' },
+    { max:59, label:'M' },
+    { max:59, label:'S' },
+  ];
+  cols.forEach(({max, label}, ci) => {
+    if (ci > 0) {
+      const sep = document.createElement('div');
+      sep.className = 'drum-sep'; sep.textContent = ':';
+      container.appendChild(sep);
+    }
+    const col = document.createElement('div');
+    col.className = 'drum-col';
+    const hl = document.createElement('div'); hl.className = 'drum-highlight';
+    const inner = document.createElement('div'); inner.className = 'drum-inner';
+    for (let v=0; v<=max; v++) {
+      const item = document.createElement('div');
+      item.className = 'drum-item' + (v===0?' selected':'');
+      item.textContent = String(v).padStart(2,'0');
+      inner.appendChild(item);
+    }
+    col.appendChild(hl); col.appendChild(inner);
+    container.appendChild(col);
+
+    // drag/scroll interaction (reuse same pattern as alarm drum)
+    let startY=0, startIdx=0;
+    const getIdx = ()=> {
+      const sel = inner.querySelector('.drum-item.selected');
+      return sel ? [...inner.children].indexOf(sel) : 0;
+    };
+    const setIdx = idx => {
+      idx = Math.max(0, Math.min(max, idx));
+      inner.querySelectorAll('.drum-item').forEach((el,i)=>el.classList.toggle('selected',i===idx));
+      inner.style.transform=`translateY(${-idx*30}px)`;
+      cdSetFromDrum();
+    };
+    col.addEventListener('mousedown', e=>{ startY=e.clientY; startIdx=getIdx(); e.preventDefault(); });
+    window.addEventListener('mousemove', e=>{ if(e.buttons!==1) return; const d=Math.round((startY-e.clientY)/30); setIdx(startIdx+d); });
+    col.addEventListener('wheel', e=>{ e.preventDefault(); setIdx(getIdx()+(e.deltaY>0?1:-1)); },{passive:false});
+  });
+}
+
+document.getElementById('btn-cd-start').addEventListener('click', ()=>{
+  const status = document.getElementById('cd-status');
+  if (!cdRunning) {
+    if (cdRemaining <= 0) return;
+    cdRunning = true;
+    cdTotal = cdRemaining;
+    cdStart = Date.now();
+    cdRaf = requestAnimationFrame(cdTick);
+    document.getElementById('btn-cd-start').textContent = 'PAUSE';
+    status.textContent = 'RUNNING'; status.className = 'running';
+  } else {
+    // pause
+    cdRemaining = Math.max(0, cdTotal - (Date.now() - cdStart));
+    cdTotal = cdRemaining;
+    cdRunning = false;
+    cancelAnimationFrame(cdRaf);
+    document.getElementById('btn-cd-start').textContent = 'RESUME';
+    status.textContent = 'PAUSED'; status.className = '';
+    redrawCD();
+  }
+});
+
+document.getElementById('btn-cd-reset').addEventListener('click', ()=>{
+  cdRunning = false; cancelAnimationFrame(cdRaf);
+  cdRemaining = 0; cdTotal = 0;
+  document.getElementById('btn-cd-start').textContent = 'START';
+  const status = document.getElementById('cd-status');
+  status.textContent = 'READY'; status.className = '';
+  buildCDPicker(); // resets drum to 00:00:00
+  redrawCD();
+  stopRingSound();
+});
+
+document.querySelectorAll('.cd-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const secs = parseInt(btn.dataset.cd);
+    cdRunning = false; cancelAnimationFrame(cdRaf);
+    cdRemaining = secs * 1000; cdTotal = cdRemaining;
+    document.getElementById('btn-cd-start').textContent = 'START';
+    const status = document.getElementById('cd-status');
+    status.textContent = 'READY'; status.className = '';
+    // sync drum to preset value
+    const h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60), s=secs%60;
+    const cols=[...document.querySelectorAll('#cd-picker .drum-col')];
+    [h,m,s].forEach((val,ci)=>{
+      if (!cols[ci]) return;
+      const inner=cols[ci].querySelector('.drum-inner');
+      inner.querySelectorAll('.drum-item').forEach((el,i)=>el.classList.toggle('selected',i===val));
+      inner.style.transform=`translateY(${-val*30}px)`;
+    });
+    redrawCD();
+    stopRingSound();
+  });
+});
 
 /* ══════════════════════════════════════════════════
    ALARM SYSTEM
@@ -1006,6 +1197,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('panel-'+activeTab).classList.add('active');
     if(activeTab==='world') redrawWorld();
     if(activeTab==='stopwatch') redrawSW();
+    if(activeTab==='countdown') redrawCD();
   });
 });
 
@@ -1108,6 +1300,8 @@ function tick() {
 loadAll();
 applyColor(currentColor);
 buildDrumPicker(document.getElementById('add-alarm-picker'));
+buildCDPicker();
+redrawCD();
 renderSetTabs();
 renderAlarms();
 redrawSW();
