@@ -510,6 +510,10 @@ const SEG = {
   '6':[1,0,1,1,1,1,1],'7':[1,1,1,0,0,0,0],'8':[1,1,1,1,1,1,1],
   '9':[1,1,1,1,0,1,1],' ':[0,0,0,0,0,0,0],
 };
+const TINY ={dw:18,dh:28,sp:6}; const SMALL={dw:26,dh:40,sp:8};
+const MED  ={dw:32,dh:50,sp:8}; const LARGE={dw:54,dh:84,sp:14};
+const WC   ={dw:30,dh:46,sp:8};
+
 function drawDigit(ctx,x,y,w,h,ch,colOn,colOff) {
   const segs=SEG[ch]||SEG[' '];
   const t=Math.max(2,Math.round(w*0.1)), g=Math.max(2,Math.round(w*0.13));
@@ -538,10 +542,6 @@ function drawColon(canvas,on) {
   const size=12,x=(canvas.width-size)/2;
   ctx.fillRect(x,22,size,size); ctx.fillRect(x,52,size,size);
 }
-
-const TINY ={dw:18,dh:28,sp:6}; const SMALL={dw:26,dh:40,sp:8};
-const MED  ={dw:32,dh:50,sp:8}; const LARGE={dw:54,dh:84,sp:14};
-const WC   ={dw:30,dh:46,sp:8};
 
 /* ── CLOCK ── */
 function redrawClock(now) {
