@@ -454,23 +454,6 @@ const DAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
 let currentColor  = 'red';
 let currentFormat = '24';
 
-/* ── BATTERY ── */
-const TOTAL_BARS = 10;
-const batteryBars = document.getElementById('battery-bars');
-let currentBatteryLevel = 0.57;
-for (let i=0; i<TOTAL_BARS; i++) {
-  const s = document.createElement('div'); s.className='battery-seg'; batteryBars.appendChild(s);
-}
-function updateBattery(level) {
-  currentBatteryLevel = level;
-  const active = Math.round(level*TOTAL_BARS);
-  [...batteryBars.children].forEach((s,i)=>s.classList.toggle('active',i<active));
-  redrawClock();
-}
-if (navigator.getBattery) {
-  navigator.getBattery().then(b=>{ updateBattery(b.level); b.addEventListener('levelchange',()=>updateBattery(b.level)); });
-} else { updateBattery(0.57); }
-
 /* ── DOT MATRIX FONT ── */
 const FONT_5x7 = {
   S:["01111","10000","10000","01110","00001","00001","11110"],
@@ -510,8 +493,10 @@ const SEG = {
   '6':[1,0,1,1,1,1,1],'7':[1,1,1,0,0,0,0],'8':[1,1,1,1,1,1,1],
   '9':[1,1,1,1,0,1,1],' ':[0,0,0,0,0,0,0],
 };
-const TINY ={dw:18,dh:28,sp:6}; const SMALL={dw:26,dh:40,sp:8};
-const MED  ={dw:32,dh:50,sp:8}; const LARGE={dw:54,dh:84,sp:14};
+const TINY ={dw:18,dh:28,sp:6}; 
+const SMALL={dw:26,dh:40,sp:8};
+const MED  ={dw:32,dh:50,sp:8}; 
+const LARGE={dw:54,dh:84,sp:14};
 const WC   ={dw:30,dh:46,sp:8};
 
 function drawDigit(ctx,x,y,w,h,ch,colOn,colOff) {
@@ -579,6 +564,23 @@ function redrawWorld(now) {
     drawString(document.getElementById(id), hh+mm, WC.dw,WC.dh,WC.sp);
   });
 }
+
+/* ── BATTERY ── */
+const TOTAL_BARS = 10;
+const batteryBars = document.getElementById('battery-bars');
+let currentBatteryLevel = 0.57;
+for (let i=0; i<TOTAL_BARS; i++) {
+  const s = document.createElement('div'); s.className='battery-seg'; batteryBars.appendChild(s);
+}
+function updateBattery(level) {
+  currentBatteryLevel = level;
+  const active = Math.round(level*TOTAL_BARS);
+  [...batteryBars.children].forEach((s,i)=>s.classList.toggle('active',i<active));
+  redrawClock();
+}
+if (navigator.getBattery) {
+  navigator.getBattery().then(b=>{ updateBattery(b.level); b.addEventListener('levelchange',()=>updateBattery(b.level)); });
+} else { updateBattery(0.57); }
 
 /* ── STOPWATCH ── */
 let swRunning=false, swStart=0, swElapsed=0, swRaf=null, swLaps=[];
