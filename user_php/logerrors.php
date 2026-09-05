@@ -132,7 +132,11 @@ function errorHandler($code, $message, $file, $line) {
     // get name of initital script
     $stack = debug_backtrace();
     $firstFrame = $stack[count($stack) - 1];
-    $initialFile = $firstFrame['file'];
+    if(array_key_exists('file', $firstFrame)) {
+      $initialFile = $firstFrame['file'];
+    } else {
+      $initialFile = '(none)';
+    }
     $php_errormsg = $message;
 	// log error
     $logger->log($message . ' in ' . basename($initialFile) . ':' . basename($file) . ' at line ' . $line, $priority);
