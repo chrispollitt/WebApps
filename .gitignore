@@ -4,3 +4,6 @@ wwl/user_js
 wwl/user_perl
 wwl/user_php
 wwl/user_python
+
+# per-directory backups made before editing (no git equivalent used here)
+**/BAK/

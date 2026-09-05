@@ -1,0 +1,47 @@
+CWPsConversationsWithAI
+https://cwpsconversationswithai.u-l.ca
+chris
+<see Foo_Bar: cwpsconversationswithai.u-l.ca:web>
+
+https://cwpsconversationswithai.u-l.ca/setup.php
+
+=====
+
+pandoc %s -f docx -t html --no-highlight    -o %s
+pandoc %s -f docx+styles -s --css mypandoc.css -o %s
+pandoc %s -s --lua-filter=mypandoc.lua --css=mypandoc.css -o %s
+
+=====
+
+.htaccess:
+SetEnv PATH /bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin:/home/whatwelo/bin:/home/whatwelo/local/usr/bin
+
+pd.php:
+putenv("PATH=".$_SERVER['PATH']);
+
+=======
+
+[04-Apr-2026 02:30:46 UTC] PHP Warning:  PHP Startup: 
+Unable to load dynamic library 'imagick.so' 
+(tried: /opt/alt/php81/usr/lib64/php/modules/imagick.so 
+(libpng15.so.15: cannot open shared object file: No such file or directory), 
+ /opt/alt/php81/usr/lib64/php/modules/imagick.so.so 
+(/opt/alt/php81/usr/lib64/php/modules/imagick.so.so: cannot open shared object file: No such file or directory)) 
+in Unknown on line 0
+
+====================
+
+BLOG
+
+1. Outlive me
+2. Full HTML formatting
+3. Built-in text to speech
+
+-----------
+
+CWPsConversationsWithAI@gmail.com
+<see Foo_Bar: gmail.com:cwpsconversationswithai>
+
+https://cwpsconversationswithai.substack.com/
+https://cwpsconversationswithai.substack.com/p/death-and-the-value-of-life
+

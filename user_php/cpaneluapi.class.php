@@ -117,7 +117,7 @@ class cpanelAPI
    */
   protected function APIcall($name, $arguments)
   {
-    $this->auth = base64_encode($this->user . ":" . $this->pass);
+    $this->auth = $this->user . ":" . $this->pass;
     $this->type = $this->ssl == 1 ? "https://" : "http://";
     $this->requestUrl = $this->type . $this->server . ':' . $this->port . $this->method;
     switch($this->api){
@@ -152,7 +152,9 @@ class cpanelAPI
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
     curl_setopt($ch, CURLOPT_HEADER, 0);
     curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array("Authorization: Basic " . $this->auth));
+    // cPanel API Tokens use their own scheme, not HTTP Basic Auth:
+    // https://api.docs.cpanel.net/guides/guide-to-cpanel-api-tokens/
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array("Authorization: cpanel " . $this->auth));
     curl_setopt($ch, CURLOPT_TIMEOUT, 100020);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
 
@@ -215,7 +217,7 @@ class cpanelAPI
             $code = curl_getinfo($rch, CURLINFO_HTTP_CODE);
             if ($code == 301 || $code == 302) {
               preg_match('/Location:(.*?)\n/', $header, $matches);
-              $newurl = trim(array_pop($matches));
+              $newurl = trim((string) array_pop($matches));
 
               // if no scheme is present then the new url is a
               // relative path and thus needs some extra care

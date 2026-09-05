@@ -48,15 +48,8 @@ function call_cpanel($cparray) {
 #fwrite(STDERR, "debug: func=".$cparray['cpanel_jsonapi_func']."\n");
 #fwrite(STDERR, "debug: query=".http_build_query($cparray)."\n");
   // cpanel api url
-  if(     $cparray['cpanel_jsonapi_func'] == "errlog" ) {
-    $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/stats/errlog.html";
-  }
-  elseif( $cparray['cpanel_jsonapi_func'] == "sysstats" ) {
-//  $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/index.html";
-    $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/resource_usage/resource_usage.live.pl#/current";
-  }
-  elseif( $cparray['cpanel_jsonapi_func'] == "sysinfo" ) {
-    $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/paper_lantern/home/status.html";
+  if( $cparray['cpanel_jsonapi_func'] == "errlog") {
+    $cpurl  = "https://".$cphost.":2083/cpsess1443216474/frontend/jupiter/stats/errlog.html";
   }
   else {
     $cpurl  = "https://".$cphost.":2083/cpsess1443216474/json-api/cpanel";
@@ -66,8 +59,16 @@ function call_cpanel($cparray) {
   $result   = false;
   $data     = array();
   TRY {
-	  
-    $header[0] = "Authorization: Basic " . base64_encode($cpuser.":".$cppass) . "\n\r";
+
+    if (function_exists('debug')) {
+      debug('cpanel request: user=' . $cpuser . ', host=' . $cphost . ', url=' . $cpurl .
+            ', module=' . ($cparray['cpanel_jsonapi_module'] ?? '') .
+            ', func='   . ($cparray['cpanel_jsonapi_func']   ?? '') .
+            ', domain=' . ($cparray['domain'] ?? ''));
+    }
+    // cPanel API Tokens use their own scheme (not HTTP Basic Auth):
+    // https://api.docs.cpanel.net/guides/guide-to-cpanel-api-tokens/
+    $header[0] = "Authorization: cpanel " . $cpuser.":".$cppass . "\n\r";
     $curl = curl_init();                                // Create Curl Object
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER,0);       // Allow self-signed certs
     curl_setopt($curl, CURLOPT_SSL_VERIFYHOST,0);       // Allow certs that do not match the hostname
@@ -75,11 +76,7 @@ function call_cpanel($cparray) {
     curl_setopt($curl, CURLOPT_RETURNTRANSFER,1);       // Return contents of transfer on curl_exec
     curl_setopt($curl, CURLOPT_HTTPHEADER, $header);    // set the username and password
     curl_setopt($curl, CURLOPT_URL, $cpurl);            // set URL
-    if(
-      $cparray['cpanel_jsonapi_func'] == "errlog"    ||
-      $cparray['cpanel_jsonapi_func'] == "sysstats"  ||
-      $cparray['cpanel_jsonapi_func'] == "sysinfo"
-    ) {
+    if( $cparray['cpanel_jsonapi_func'] == "errlog") {
       curl_setopt($curl, CURLOPT_HTTPGET, TRUE);        // set method to GET
     } else {
       curl_setopt($curl, CURLOPT_POST, count($cparray));// set method to POST
@@ -87,10 +84,13 @@ function call_cpanel($cparray) {
     }
     $response = curl_exec($curl);                       // run it!
     if ($response === false) {
-      throw new Exception('curl_exec threw error: ' . curl_error($curl) ); 
+      throw new Exception('curl_exec threw error: ' . curl_error($curl) );
+    }
+    if (function_exists('debug')) {
+      debug('cpanel http status: ' . curl_getinfo($curl, CURLINFO_HTTP_CODE));
     }
     curl_close($curl);
-    // html output //////////////////////
+    // html output
     if( $cparray['cpanel_jsonapi_func'] == "errlog") {
 #fwrite(STDERR, "debug: resp=".$response."\n");
       $inerrlog = 0;
@@ -110,56 +110,50 @@ function call_cpanel($cparray) {
         }
       }
       $data[] = "";
-	  }
-    elseif( $cparray['cpanel_jsonapi_func'] == "sysstats" ) {
-      $data[] = "[sysstats not implimented yet]";
-      $result = 1;
-    }
-    elseif( $cparray['cpanel_jsonapi_func'] == "sysinfo" ) {
-      $dom = new domDocument;
-      libxml_use_internal_errors(true);
-      @$dom->loadHTML($response);
-      $dom->preserveWhiteSpace = false;
-      $tables = $dom->getElementsByTagName('table');      
-      $rows = $tables->item(1)->getElementsByTagName('tr');
-      foreach ($rows as $row) {
-        $cols = $row->getElementsByTagName('td');
-        $var = trim($cols->item(0)->textContent);
-        $val = trim($cols->item(1)->textContent);
-        if($val && $val != "up") {
-          $data[] = $var  . ": " . $val;
-        }
-      }
-      $result = 1;
-    }
-    // json output /////////////////////
+	}
     else {
       $json = json_decode($response);
-#fwrite(STDERR, "debug: json=".print_r($json,true)."\n");
+      // malformed/non-JSON response (e.g. an HTML login page from an expired session)
+      if ( !is_object($json) || !property_exists($json, 'cpanelresult') ) {
+        if (function_exists('debug')) {
+          debug('cpanel raw response: ' . $response);
+        }
+        throw new Exception('cpanel error: invalid or non-JSON response');
+      }
       // errors
-      if    ( sizeof($json->{'cpanelresult'}->{'data'}) == 0     ) {
+      if    ( property_exists( $json->{'cpanelresult'},'error')  ) {
+        if (function_exists('debug')) {
+          debug('cpanel raw response: ' . $response);
+        }
+        throw new Exception('cpanel error: ' . $json->{'cpanelresult'}->{'error'});
+      }
+      elseif( property_exists( $json->{'cpanelresult'},'reason') ) {
+        if (function_exists('debug')) {
+          debug('cpanel raw response: ' . $response);
+        }
+        throw new Exception('cpanel error: ' . $json->{'cpanelresult'}->{'reason'});
+      }
+      elseif( !is_array($json->{'cpanelresult'}->{'data'}) ||
+               sizeof($json->{'cpanelresult'}->{'data'}) == 0     ) {
+        if (function_exists('debug')) {
+          debug('cpanel raw response: ' . $response);
+        }
         throw new Exception('cpanel error: ' . "empty data set");
       }
-      elseif( array_key_exists('error', $json->{'cpanelresult'})  ) {
-        throw new Exception('cpanel error: ' . $json->{'cpanelresult'}->{'error'}); 
-      }
-      elseif( array_key_exists('reason', $json->{'cpanelresult'}) ) {
-        throw new Exception('cpanel error: ' . $json->{'cpanelresult'}->{'reason'}); 
-      }
       // event result
-      elseif ( array_key_exists('event', $json->{'cpanelresult'})             &&
-               array_key_exists('result', $json->{'cpanelresult'}->{'event'}) &&
+      elseif ( property_exists( $json->{'cpanelresult'},'event')             &&
+               property_exists( $json->{'cpanelresult'}->{'event'},'result') &&
                sizeof($json->{'cpanelresult'}->{'data'}) == 1                 &&
                gettype($json->{'cpanelresult'}->{'data'}[0]) == "integer" ) {
         $data   = $json->{'cpanelresult'}->{'data'}[0];
         $result = $json->{'cpanelresult'}->{'event'}->{'result'};
       }      
       // result (top)
-      elseif (   array_key_exists('result', $json->{'cpanelresult'}->{'data'}[0]) ) {
+      elseif (   property_exists( $json->{'cpanelresult'}->{'data'}[0],'result') ) {
         // object result (second)
         if (gettype($json->{'cpanelresult'}->{'data'}[0]->{'result'}) == "object") {
           // status (second)
-          if(array_key_exists('status', $json->{'cpanelresult'}->{'data'}[0]->{'result'})) {
+          if(property_exists( $json->{'cpanelresult'}->{'data'}[0]->{'result'},'status')) {
             if ($json->{'cpanelresult'}->{'data'}[0]->{'result'}->{'status'} != 1) {
               throw new Exception('cpanel error "' . $json->{'cpanelresult'}->{'data'}[0]->{'result'}->{'statusmsg'}); 
             }
@@ -185,7 +179,7 @@ function call_cpanel($cparray) {
         }
       }
       // status (top)
-      elseif(     array_key_exists('status', $json->{'cpanelresult'}->{'data'}[0]) ) {
+      elseif(     property_exists( $json->{'cpanelresult'}->{'data'}[0],'status') ) {
         if ($json->{'cpanelresult'}->{'data'}[0]->{'status'} != 1) {
           throw new Exception('cpanel error "' . $json->{'cpanelresult'}->{'data'}[0]->{'statusmsg'}); 
         }
@@ -340,6 +334,13 @@ function update_certs($crt_file) {
   }
   $incrt = false;
   while ($line = fgets($crt_fh)) {
+    // get signer from Issuer
+    $match = preg_replace("/.*Issuer:.* CN=([*\w.-]+).*/", '$1', $line);
+    if($match != $line) {
+      $signer = rtrim($match);
+      continue;
+    }
+    // get domain from Subject
     $match = preg_replace("/.*Subject:.* CN=([*\w.-]+).*/", '$1', $line);
     if($match != $line) {
       $domain = rtrim($match);
@@ -347,6 +348,7 @@ function update_certs($crt_file) {
       $domain = preg_replace("/^.*\.([^.]+\.[^.]+)$/","$1",$domain);
       continue;
     }
+    // get subdomains from DNS
     $pat = "/^(\s+)\bDNS:([\w.-]+)(?:, )?(.*)$/";
     $match = preg_replace($pat, '$2', $line);
     while($match != $line) {
@@ -357,6 +359,7 @@ function update_certs($crt_file) {
       $line = preg_replace($pat, '$1$3', $line);
       $match = preg_replace($pat, '$2', $line);
     }
+    // get root and signing certs
     if($line == "-----BEGIN CERTIFICATE-----\n") {
       $incrt = true;
       $crt .= $line;
@@ -403,9 +406,9 @@ function update_certs($crt_file) {
     openssl_pkey_export($key2, $key);
   }
 
-  // --- CAB ---
+  // --- CAB = CA Bundle --- (Root + Signing certs)
   $cab      = "";
-  $cab_file = preg_replace("/certs\/[\w.-]+\.crt$/","ca/signing-ca-chain.pem",$crt_file);
+  $cab_file = preg_replace("/certs\/[\w.-]+\.crt$/","ca/signing-ca-chain$signer.pem",$crt_file);
   if($cab_file == $crt_file) {
     fwrite(STDERR, "error in generating cab file name\n");
     exit(1);
@@ -589,37 +592,6 @@ function get_error_log() {
     trigger_error( "get error log failed", E_USER_NOTICE);
   }
   
-  return($data);
-}
-
-/////////////
-// get system stats and info
-function get_stats() {
-  global $cphost;
-  global $domain;
-  global $uapi;
-
-  // Get ResourceUsage
-  $uapi->scope = 'ResourceUsage';
-  $res = $uapi->get_usages();
-  foreach($res->{'data'} as $usage) {
-    // description, error, formatter, id, maximum, url, usage
-    $data1[] = $usage->{'description'} . ": " . $usage->{'usage'};
-  }
-
-  // Get sysinfo
-  $cparray = array(
-    "cpanel_jsonapi_module" => "Stats",
-    "cpanel_jsonapi_func"   => "sysinfo",
-    "domain"                => $domain,
-  );
-  list($result, $data2) = call_cpanel($cparray);
-  if ($result === false) {
-    trigger_error( "get stats2 failed", E_USER_NOTICE);
-  }
-
-  $data = array_merge($data1,$data2);
-  sort($data);
   return($data);
 }
 

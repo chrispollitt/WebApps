@@ -15,13 +15,17 @@ require_once('cpanel.php');
 // main domain for dynamic DNS
 $dyndns = "whatwelove.org";
 // cpanel api url
-$cphost = 'cs16.uhcloud.com';
+$cphost = 'cp1.uhcloud.com';
 $subdomain = 'cmnet';
 $ip = $argv[1];
 
 cpinit($cphost, $dyndns);
 // update dns ////////////////////////////////
 $rec = get_subdomains($subdomain );
+if ($rec === false) {
+  fwrite(STDERR, "subdomain not found: $subdomain\n");
+  exit(1);
+}
 $oldip = $rec->{'address'};
 $retval1 = update_dns($subdomain , $ip);
 // check whether DNS update was successful
