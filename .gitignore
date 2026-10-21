@@ -7,3 +7,5 @@ wwl/user_python
 
 # per-directory backups made before editing (no git equivalent used here)
 **/BAK/
+/GoogleVoice/
+/LifeTracker/
