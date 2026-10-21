@@ -1,0 +1,11 @@
+Options +FollowSymLinks
+RewriteEngine On
+RewriteBase /
+
+RewriteRule ^nic/update(.*)$ update_dyndns.php$1 [NC,L]
+
+AuthType Basic
+AuthName "dyndns"
+AuthUserFile "/home/whatwelo/.htpasswds/public_html/dyndns/passwd"
+require valid-user
+

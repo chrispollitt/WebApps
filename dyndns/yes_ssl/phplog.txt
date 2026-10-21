@@ -1,0 +1,8 @@
+2026-09-04_3:43:09 PM  [notice] ====START==== in update_dyndns.php:logerrors.php at line 206
+2026-09-04_3:43:09 PM  [debug] agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 Edg/152.0.0.0
+2026-09-04_3:43:10 PM  [error] cpanel error: empty data set for fetchzone in update_dyndns.php:cpanel.php at line 170
+2026-09-04_3:43:10 PM  [warning] Attempt to read property "address" on bool in update_dyndns.php:update_dyndns.php at line 111
+2026-09-04_3:43:10 PM  [error] cpanel error: empty data set for fetchzone in update_dyndns.php:cpanel.php at line 170
+2026-09-04_3:43:10 PM  [error] Changing dns for cmnet.whatwelove.org to 209.121.12.33 failed: 
+2026-09-04_3:43:10 PM  [debug] Changing dns for cmnet.whatwelove.org to 209.121.12.33 succeeded: 
+2026-09-04_3:43:10 PM  [notice] ====END====

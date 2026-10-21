@@ -1,0 +1,13 @@
+Options +FollowSymLinks
+RewriteEngine On
+RewriteBase /
+
+#RewriteCond %{HTTPS} off
+#RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+#RewriteCond %{HTTPS} on
+RewriteCond %{REQUEST_URI} !^/\.well-known
+RewriteRule (.*) yes_ssl/$1 [NC,L]
+
+RewriteRule .*\.(conf|ini)$ - [F,NC]
+AddType application/javascript js mjs
