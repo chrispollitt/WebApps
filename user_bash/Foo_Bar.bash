@@ -6,6 +6,11 @@ fb_path="$fb_dir/user_php"
 
 function foo() {
   local -a output
+  local skip=0
+  if [[ $1 == -* ]]; then
+    skip=1
+    shift
+  fi
   local one="$1"
   local IFS=$(echo -ne "\n\t")
   # call script
@@ -19,7 +24,11 @@ function foo() {
     two="failed"
   fi
   
-  echo -e "$three\t$two"
+  if [[ $skip == 1 ]]; then
+    echo -e "$two"
+  else
+    echo -e "$three\t$two"
+  fi
 }
 
 function bar() {
