@@ -3,8 +3,9 @@
 # Create the following certs:
 # * CA Root
 # * CA Signer
-# * Email (S/MIME)
-# * TLS   (https webhost)
+# * Email        (S/MIME)
+# * Code Signing (Windows signtool, Linux osslsigncode/sbsign/pesign)
+# * TLS          (https webhost)
 #
 # http://pki-tutorial.readthedocs.org/en/latest/simple/
 #
@@ -14,14 +15,15 @@
 # root dir
 ssl_root_dir="/etc/ssl/Simple_Inc"
 
-# root and signing  !!DO NOT REGEN till 2030!! pw=secret
+# root and signing  !!DO NOT REGEN till 2030!! (CA key passphrases are not kept here)
 create_root_ca=0
 create_signing_ca=0
 
-# email and tls
+# email, code signing, and tls
 auto=0
 create_tls_certs=1
 create_email_certs=0
+create_code_signing_certs=0
 create_revoke_certs=0
 
 # alt formats
@@ -51,8 +53,18 @@ if [[ $auto == 1 ]]; then
   domains['whatwelove.org']=$(get_subdomains.php $cpanel 'whatwelove.org'|grep -Pv "$wwl_omit")
 # --manual--
 else
-  domains["mesh"]=""
-  domains["cmnet6.landmarkcourt.ca"]=""
+#*** MAKE MANUAL CHANGES HERE ************************************************
+#  domains["cmpi"]=""
+   domains["cpbee"]=""
+#  domains["mesh"]=""
+#  domains["cmnet6.landmarkcourt.ca"]=""
+#  domains["cmlaptop"]=""
+#  domains["cmdesktop"]=""
+   # extra Subject Alternative Names for a one-label host (DNS:name IP:addr); used only for the one-label case
+   declare -A extra_san
+   extra_san["cpbee"]="DNS:cpbee.lan IP:192.168.10.1"
+#*** END OF MANUAL CHANGES ***************************************************
+   true
 fi
 
 # defaults
@@ -333,6 +345,13 @@ extendedKeyUsage        = serverAuth,clientAuth
 subjectKeyIdentifier    = hash
 authorityKeyIdentifier  = keyid:always
 
+[ code_signing_ext ]
+keyUsage                = critical,digitalSignature
+basicConstraints        = CA:false
+extendedKeyUsage        = codeSigning
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always
+
 # CRL extensions exist solely to point to the CA certificate that has issued
 # the CRL.
 
@@ -606,6 +625,15 @@ commonName              = "$domain"
 DNS.1 = $domain
 _EOF_
 
+# extra names for a one-label host (see extra_san near the top): DNS:name and IP:addr
+(( i=2 )); (( j=1 ))
+for e in ${extra_san[$domain]:-}; do
+  case $e in
+    DNS:*) echo "DNS.$i = ${e#DNS:}" >> etc/${domain//./-}.conf; (( i++ ));;
+    IP:*)  echo "IP.$j = ${e#IP:}"   >> etc/${domain//./-}.conf; (( j++ ));;
+  esac
+done
+
 fi
 
 # 4.4.2 Create TLS server request
@@ -635,7 +663,81 @@ fi
 
 fi
 
-done 
+done
+
+#############
+# 4.5 Create Code Signing certificate
+if [[ $create_code_signing_certs == 1 ]]; then
+
+echo "#### 4.5 Create Code Signing certificate ####"
+
+# 4.5.1 Create Code Signing certificate request Configuration File
+echo "## 4.5.1 Create Code Signing certificate request Configuration File ##"
+
+cat > etc/${user//./-}-codesign.conf <<_EOF_
+# Code signing certificate request
+
+[ req ]
+default_bits            = $default_bits         # RSA key size
+encrypt_key             = yes                   # Protect private key
+default_md              = $default_md           # MD to use
+utf8                    = yes                   # Input is UTF-8
+string_mask             = utf8only              # Emit UTF-8 strings
+prompt                  = no                    # Don't prompt for DN
+distinguished_name      = code_dn               # DN template
+req_extensions          = code_reqext           # Desired extensions
+
+[ code_dn ]
+0.domainComponent       = "org"
+1.domainComponent       = "simple"
+organizationName        = "Simple Inc"
+commonName              = "$user_full"
+emailAddress            = "$user@simple.org"
+
+[ code_reqext ]
+keyUsage                = critical,digitalSignature
+extendedKeyUsage        = codeSigning
+subjectKeyIdentifier    = hash
+
+_EOF_
+
+# 4.5.2 Create Code Signing request
+echo "## 4.5.2 Create Code Signing request ##"
+
+openssl req -new \
+    -config etc/${user//./-}-codesign.conf \
+    -out certs/${user//./-}-codesign.csr \
+    -keyout certs/${user//./-}-codesign.key
+
+# 4.5.2a The Signing CA config only gets [ code_signing_ext ] when the Signing CA
+# is (re)created, so an older CA config may lack it.  Add it if missing
+# (previous config kept in etc/BAK, 3 newest).
+if ! grep -q '^\[ *code_signing_ext *\]' etc/signing-ca.conf; then
+    echo "## 4.5.2a Adding [ code_signing_ext ] to etc/signing-ca.conf ##"
+    mkdir -p etc/BAK
+    cp -p etc/signing-ca.conf etc/BAK/signing-ca.conf.bak-$(date +%Y%m%d-%H%M%S)
+    ls -1t etc/BAK/signing-ca.conf.bak-* | tail -n +4 | xargs -r rm -f
+    cat >> etc/signing-ca.conf <<_EOF_
+
+[ code_signing_ext ]
+keyUsage                = critical,digitalSignature
+basicConstraints        = CA:false
+extendedKeyUsage        = codeSigning
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always
+_EOF_
+fi
+
+# 4.5.3 Create Code Signing certificate
+echo "## 4.5.3 Create Code Signing certificate ##"
+
+openssl ca \
+    -config etc/signing-ca.conf \
+    -in certs/${user//./-}-codesign.csr \
+    -out certs/${user//./-}-codesign.crt \
+    -extensions code_signing_ext
+
+fi
 
 ######################
 # 5. Output Formats
@@ -684,6 +786,35 @@ if [[ $create_signing_ca == 1 ]]; then
 cat ca/signing-ca.crt \
     ca/root-ca.crt > \
     ca/signing-ca-chain.pem
+
+fi
+
+fi
+
+# 5.4 Create Code Signing output formats
+if [[ $create_code_signing_certs == 1 ]]; then
+
+# 5.4.1 Create PKCS#12 bundle (for Windows signtool)
+if [[ $create_pkcs12 == 1 ]]; then
+
+echo "#### 5.4.1 Create PKCS#12 Code Signing bundle ####"
+
+openssl pkcs12 -export \
+    -name "$user_full Code Signing" \
+    -inkey certs/${user//./-}-codesign.key \
+    -in  certs/${user//./-}-codesign.crt \
+    -out certs/${user//./-}-codesign.p12
+
+fi
+
+# 5.4.2 Create PEM bundle (for Linux tools: osslsigncode, sbsign/pesign, kernel module signing)
+if [[ $create_pem == 1 ]]; then
+
+echo "#### 5.4.2 Create PEM Code Signing bundle ####"
+
+cat certs/${user//./-}-codesign.key \
+    certs/${user//./-}-codesign.crt > \
+    certs/${user//./-}-codesign.pem
 
 fi
 
@@ -842,3 +973,18 @@ done
 fi
 
 ##########################
+
+# =====extendedKeyUsage====
+# Value                  Meaning according to RFC 5280 etc.
+# -----                  ----------------------------------
+# serverAuth             SSL/TLS WWW Server Authentication
+# clientAuth             SSL/TLS WWW Client Authentication
+# codeSigning            Code Signing
+# emailProtection        E-mail Protection (S/MIME)
+# timeStamping           Trusted Timestamping
+# OCSPSigning            OCSP Signing
+# ipsecIKE               ipsec Internet Key Exchange
+# msCodeInd              Microsoft Individual Code Signing (authenticode)
+# msCodeCom              Microsoft Commercial Code Signing (authenticode)
+# msCTLSign              Microsoft Trust List Signing
+# msEFS                  Microsoft Encrypted File System
