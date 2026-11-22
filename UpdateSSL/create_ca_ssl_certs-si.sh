@@ -11,60 +11,56 @@
 #
 
 ####################################################
+# Configuration
+#
+# This script holds the code only.  WHAT to create (the toggles), WHO it is
+# for and WHICH hosts live in a local file that is sourced below, so editing
+# them never dirties the repo.  Start from si-local.conf.example.
 
 # root dir
 ssl_root_dir="/etc/ssl/Simple_Inc"
 
-# root and signing  !!DO NOT REGEN till 2030!! (CA key passphrases are not kept here)
+# local settings file (override with SI_LOCAL_CONF=...)
+local_conf="${SI_LOCAL_CONF:-$ssl_root_dir/si-local.conf}"
+
+# defaults: create nothing until the local file says so
 create_root_ca=0
 create_signing_ca=0
-
-# email, code signing, and tls
 auto=0
-create_tls_certs=1
+create_tls_certs=0
 create_email_certs=0
 create_code_signing_certs=0
 create_revoke_certs=0
-
-# alt formats
 create_crl=0
 create_der=0
 create_der_crl=0
-create_pem=1
+create_pem=0
 create_pkcs12=0
 create_pkcs7=0
-
-# user info
-user="chris.pollitt"
-user_full="Chris Pollitt"
-
-# domain info
+user=""
+user_full=""
+cpanel=""
+cml_omit=""
+wwl_omit=""
 declare -A domains
-  cpanel='cs16.uhcloud.com'
-cml_omit='^(cmnet.whatwelove.org)\.'
-wwl_omit='^(ul|u-l|universal-laughter|landmarkcourt)\.'
-# --auto--
+declare -A extra_san
+
+if [[ ! -f $local_conf ]]; then
+  echo "Missing $local_conf - copy si-local.conf.example there and edit it." >&2
+  exit 1
+fi
+# shellcheck disable=SC1090
+source "$local_conf"
+
+# --auto--: take the hosts from Apache vhosts and cPanel instead of domains[]
 if [[ $auto == 1 ]]; then
+  domains=()
   # local
   for domain in $(perl -MGetHosts -le 'print "".join("\n",get_apache_vhosts())'|grep -Pv "$cml_omit"); do
     domains["$domain"]=""
   done
   # wwl
   domains['whatwelove.org']=$(get_subdomains.php $cpanel 'whatwelove.org'|grep -Pv "$wwl_omit")
-# --manual--
-else
-#*** MAKE MANUAL CHANGES HERE ************************************************
-#  domains["cmpi"]=""
-   domains["cpbee"]=""
-#  domains["mesh"]=""
-#  domains["cmnet6.landmarkcourt.ca"]=""
-#  domains["cmlaptop"]=""
-#  domains["cmdesktop"]=""
-   # extra Subject Alternative Names for a one-label host (DNS:name IP:addr); used only for the one-label case
-   declare -A extra_san
-   extra_san["cpbee"]="DNS:cpbee.lan IP:192.168.10.1"
-#*** END OF MANUAL CHANGES ***************************************************
-   true
 fi
 
 # defaults

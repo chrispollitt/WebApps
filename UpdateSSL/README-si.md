@@ -11,14 +11,21 @@ signing).
 
 ```
 Simple_Inc/
-├── bin/create_ca_ssl_certs-si.sh   # this script
+├── bin/create_ca_ssl_certs-si.sh   # this script (code only; may be a symlink into a repo)
+├── si-local.conf                   # YOUR toggles, user and hosts (sourced by the script)
 ├── etc/                            # generated openssl configs (*.conf)
 ├── ca/                             # root-ca.*, signing-ca.*, CA db/serial
 ├── certs/                          # issued certs, keys, csrs, bundles
 └── crl/                            # revocation lists
 ```
 
-## Toggles (top of script)
+## Toggles (in si-local.conf)
+
+The script holds code only. Copy `si-local.conf.example` to
+`/etc/ssl/Simple_Inc/si-local.conf` and edit that: it is plain bash, sourced at
+the top of the script, and the script refuses to run without it
+(`SI_LOCAL_CONF=/path` overrides the location). Settings left out default to
+`0` / empty, so nothing is created unless the local file asks for it.
 
 | Variable | Purpose |
 |---|---|
@@ -31,8 +38,8 @@ Simple_Inc/
 | `create_crl` / `create_der_crl` | Emit a CRL (PEM / DER). |
 | `create_pem` / `create_der` / `create_pkcs12` / `create_pkcs7` | Output formats for whatever was issued above. |
 
-Everything defaults to `0` except `create_tls_certs` and `create_pem` — flip
-on only what you need for a given run.
+Everything defaults to `0` in the script; the example file turns on `create_pem`. Flip
+on only what you need for a given run, in `si-local.conf`.
 
 `user` / `user_full` set the identity used for email and code-signing certs.
 `domains{}` (manual block, or `auto=1` to pull from Apache vhosts) drives TLS

@@ -1,0 +1,38 @@
+# Local settings for create_ca_ssl_certs-si.sh
+#
+# Copy this file to /etc/ssl/Simple_Inc/si-local.conf (NOT into the repo) and
+# edit it.  It is sourced by the script, so it is plain bash.  Anything left
+# out keeps the script's default (create nothing).
+
+# root and signing CAs   !!DO NOT REGEN once they exist!!
+create_root_ca=0
+create_signing_ca=0
+
+# leaf certs: which kinds to issue this run
+auto=0                         # 1 = hosts from Apache vhosts / cPanel (needs cpanel, *_omit below)
+create_tls_certs=0
+create_email_certs=0
+create_code_signing_certs=0
+create_revoke_certs=0
+
+# alternate formats to write
+create_crl=0
+create_der=0
+create_der_crl=0
+create_pem=1
+create_pkcs12=0
+create_pkcs7=0
+
+# who the email / code-signing certs are for
+user="first.last"
+user_full="First Last"
+
+# hosts to issue TLS certs for (used when auto=0): domains["host"]="subdomains"
+# domains["myhost"]=""
+# extra Subject Alternative Names for a one-label host (DNS:name IP:addr)
+# extra_san["myhost"]="DNS:myhost.lan IP:192.168.1.1"
+
+# only used with auto=1
+# cpanel='cpanel.example.com'
+# cml_omit='^(host.example.org)\.'
+# wwl_omit='^(sub1|sub2)\.'
