@@ -1,12 +1,10 @@
 #!/bin/bash
 
-. /home/Chris/user_bash/Foo_Bar.bash
-
 library="/home/Chris/Documents/Calibre Library"
 webdir="/srv/apache2/vhosts/cmlaptop/htdocs-ORIG/books"
 host="whatwelove.org"
 declare -a up
-up=($(foo "$host:sftp"))
+up=($(auth get sftp "$host" --with-login))
 user="${up[0]}"
 pass="${up[1]}"
 remdir="/public_html/books/"
