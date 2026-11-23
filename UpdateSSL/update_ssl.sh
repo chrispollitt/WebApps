@@ -39,7 +39,7 @@ function mainf() {
     update_cert $host
   done
   
-  # save cert to dropbox
+  # save cert to dropbox (RETIRED 2026-11-23: Dropbox is unused legacy; update_dropbox.py is in OLD/)
   #echo "##### update_dropbox.py #####"
   #update_dropbox.py
   # end
