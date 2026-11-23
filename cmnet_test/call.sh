@@ -8,10 +8,9 @@ port="6767"
 
 ##########################
 
-. ~/user_bash/Foo_Bar.bash
 declare -a up
 url_base="https://$host:$port"
-up=($(foo "${host}:web"))
+up=($(auth get https "$host" --with-login))
 user="${up[0]}"
 pass="${up[1]}"
 wget_args="--quiet --no-check-certificate --output-document=- --user=$user --password=$pass"
@@ -19,13 +18,12 @@ wget_args="--quiet --no-check-certificate --output-document=- --user=$user --pas
 out1=$(wget $wget_args "$url_base/")
 if [[ $out1 == *Authentication* ]]; then
   if [[ $out1 == *@* ]]; then
-    host2="whatwelove.org:2fa"
-    up=($(foo "$host2"))
+    up=($(auth get 2fa whatwelove.org --with-login))
     user2="${up[0]}"
     pass2="${up[1]}"
     token="$pass2"
   else
-    token=$($HOME/bin/get2fa_code.py)
+    token=$(auth totp whatwelove.org whatwelo | tail -1 | tr -d '[:space:]')
   fi  
   out2=$(wget $wget_args --save-cookies cookies.txt --post-data="token=$token" "$url_base/auth/auth?/%3f")
 else
