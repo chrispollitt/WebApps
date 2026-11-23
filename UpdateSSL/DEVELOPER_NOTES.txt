@@ -16,7 +16,7 @@ update_ssl.sh
   update_certs.php universal-laughter
   update_certs.php landmarkcourt
   update_certs.php u-l
-  update_dropbox.py
+  (update_dropbox.py: retired 2026-11-23, moved to OLD/; Dropbox is unused, OneDrive is the cloud backup)
 
 ------------
 
